@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>In mã QR dán lên xe</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .qr-card{page-break-inside:avoid;text-align:center;padding:26px 18px}
+  .qr-box{display:inline-block;padding:14px;background:#fff;border-radius:14px;border:1px solid var(--line)}
+  .qr-box img,.qr-box canvas{display:block}
+  .qr-name{font-size:30px;font-weight:800;margin:14px 0 2px;color:var(--ink)}
+  .qr-sub{font-size:14px;color:var(--ink-soft);margin-bottom:6px}
+  .qr-inst{font-size:15px;color:var(--ink);margin-top:12px;line-height:1.5}
+  .url{font-size:11px;color:var(--ink-soft);word-break:break-all;margin-top:8px}
+  .noprint{margin:0 4px 14px}
+  @media print{
+    .noprint{display:none} body{background:#fff;padding:0}
+    .card{box-shadow:none;border:1px dashed #bbb;margin:0 0 8mm}
+    .wrap{max-width:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="appbar noprint">
+    <h1>MÃ QR DÁN LÊN XE</h1>
+  </div>
+
+  <div class="card noprint">
+    <p style="margin:0 0 10px">In trang này, cắt theo khung và dán mã QR tương ứng lên từng xe. Tài xế mở camera điện thoại quét là vào ngay trang thao tác của xe đó.</p>
+    <button class="btn" onclick="window.print()">In</button>
+  </div>
+
+  <div id="cards"></div>
+  <div class="foot" id="foot"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="config.js"></script>
+<script>
+var CFG=window.APP_CONFIG;
+document.getElementById("foot").textContent=CFG.unit;
+
+/* URL gốc = thư mục hiện tại (bỏ 'qr.html') -> ghép xe.html?id= */
+var base=location.href.replace(/qr\.html.*$/,"").replace(/[^\/]*$/,"");
+if(!/\/$/.test(base)) base+="/";
+
+var wrap=document.getElementById("cards");
+CFG.vehicles.forEach(function(v){
+  var url=base+"xe.html?id="+encodeURIComponent(v.id);
+  var card=document.createElement("div");
+  card.className="card qr-card";
+  card.innerHTML=
+    '<div class="qr-box"><div class="qrimg"></div></div>'
+    +'<div class="qr-name">'+v.label+'</div>'
+    +(v.plate?'<div class="qr-sub">'+v.plate+'</div>':'')
+    +'<div class="qr-inst">Tài xế: quét mã này khi lên xe</div>'
+    +'<div class="url">'+url+'</div>';
+  wrap.appendChild(card);
+  new QRCode(card.querySelector(".qrimg"),{text:url,width:240,height:240,correctLevel:QRCode.CorrectLevel.M});
+});
+
+if(location.protocol==="file:"){
+  var note=document.createElement("div");
+  note.className="card noprint";
+  note.innerHTML='<b>Lưu ý:</b> Bạn đang mở file cục bộ. Mã QR chỉ đúng khi đã đưa web lên '
+    +'GitHub Pages — hãy mở lại <code>qr.html</code> từ địa chỉ đó rồi in.';
+  document.getElementById("cards").before(note);
+}
+</script>
+</body>
+</html>

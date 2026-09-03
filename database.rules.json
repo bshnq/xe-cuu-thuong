@@ -1,0 +1,12 @@
+{
+  "rules": {
+    "vehicles": {
+      ".read": true,
+      ".write": true
+    },
+    "history": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
