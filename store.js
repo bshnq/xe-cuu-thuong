@@ -22,56 +22,76 @@
     return map;
   }
 
-  /* ---------------------- Backend Firebase ---------------------- */
+  /* ---------------------- Backend Firebase ----------------------
+     Đăng nhập ẩn danh trước khi đọc/ghi (rules yêu cầu auth != null).
+     Tài xế KHÔNG thấy bước đăng nhập này - SDK tự làm ngầm. */
   function FirebaseStore() {
     firebase.initializeApp(CFG.firebase);
     this.db = firebase.database();
     this.ref = this.db.ref("vehicles");
+    this.ready = new Promise(function (resolve) {
+      firebase.auth().onAuthStateChanged(function (user) { if (user) resolve(user); });
+      firebase.auth().signInAnonymously().catch(function (e) {
+        console.error("Đăng nhập ẩn danh lỗi:", e && e.message);
+      });
+    });
   }
   FirebaseStore.prototype.subscribeAll = function (cb) {
-    this.ref.on("value", function (snap) {
-      var val = snap.val() || {};
-      var map = blankState();
-      Object.keys(map).forEach(function (id) {
-        if (val[id]) map[id] = Object.assign(map[id], val[id]);
+    var self = this;
+    this.ready.then(function () {
+      self.ref.on("value", function (snap) {
+        var val = snap.val() || {};
+        var map = blankState();
+        Object.keys(map).forEach(function (id) {
+          if (val[id]) map[id] = Object.assign(map[id], val[id]);
+        });
+        cb(map);
       });
-      cb(map);
     });
   };
   FirebaseStore.prototype.startTrip = function (id, minutes, dest) {
-    var depart = nowMs();
-    this.ref.child(id).set({
-      status: "busy",
-      departAt: depart,
-      etaMinutes: minutes,
-      returnAt: depart + minutes * 60000,
-      destination: dest || "",
-      updatedAt: depart
+    var self = this;
+    this.ready.then(function () {
+      var depart = nowMs();
+      self.ref.child(id).set({
+        status: "busy",
+        departAt: depart,
+        etaMinutes: minutes,
+        returnAt: depart + minutes * 60000,
+        destination: dest || "",
+        updatedAt: depart
+      });
     });
   };
   FirebaseStore.prototype.extendTrip = function (id, minutes) {
-    var r = this.ref.child(id);
-    r.once("value", function (snap) {
-      var v = snap.val(); if (!v || v.status !== "busy") return;
-      var eta = (v.etaMinutes || 0) + minutes;
-      r.update({
-        etaMinutes: eta,
-        returnAt: (v.departAt || nowMs()) + eta * 60000,
-        updatedAt: nowMs()
+    var self = this;
+    this.ready.then(function () {
+      var r = self.ref.child(id);
+      r.once("value", function (snap) {
+        var v = snap.val(); if (!v || v.status !== "busy") return;
+        var eta = (v.etaMinutes || 0) + minutes;
+        r.update({
+          etaMinutes: eta,
+          returnAt: (v.departAt || nowMs()) + eta * 60000,
+          updatedAt: nowMs()
+        });
       });
     });
   };
   FirebaseStore.prototype.endTrip = function (id) {
-    var db = this.db, r = this.ref.child(id);
-    r.once("value", function (snap) {
-      var v = snap.val();
-      if (v && v.status === "busy") {
-        db.ref("history").push({
-          vehicle: id, departAt: v.departAt, etaMinutes: v.etaMinutes,
-          returnAt: v.returnAt, actualReturnAt: nowMs(), destination: v.destination || ""
-        });
-      }
-      r.set({ status: "available", departAt: 0, etaMinutes: 0, returnAt: 0, destination: "", updatedAt: nowMs() });
+    var self = this;
+    this.ready.then(function () {
+      var db = self.db, r = self.ref.child(id);
+      r.once("value", function (snap) {
+        var v = snap.val();
+        if (v && v.status === "busy") {
+          db.ref("history").push({
+            vehicle: id, departAt: v.departAt, etaMinutes: v.etaMinutes,
+            returnAt: v.returnAt, actualReturnAt: nowMs(), destination: v.destination || ""
+          });
+        }
+        r.set({ status: "available", departAt: 0, etaMinutes: 0, returnAt: 0, destination: "", updatedAt: nowMs() });
+      });
     });
   };
 

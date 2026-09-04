@@ -1,12 +1,25 @@
 {
   "rules": {
     "vehicles": {
-      ".read": true,
-      ".write": true
+      ".read": "auth != null",
+      "$vid": {
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['status'])",
+        "status":      { ".validate": "newData.isString() && (newData.val() === 'available' || newData.val() === 'busy')" },
+        "departAt":    { ".validate": "newData.isNumber()" },
+        "etaMinutes":  { ".validate": "newData.isNumber()" },
+        "returnAt":    { ".validate": "newData.isNumber()" },
+        "destination": { ".validate": "newData.isString() && newData.val().length <= 80" },
+        "updatedAt":   { ".validate": "newData.isNumber()" },
+        "$other":      { ".validate": false }
+      }
     },
     "history": {
-      ".read": true,
-      ".write": true
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$item": {
+        ".validate": "newData.hasChildren(['vehicle','actualReturnAt'])"
+      }
     }
   }
 }
