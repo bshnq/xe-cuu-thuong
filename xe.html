@@ -3,161 +3,195 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Xe cứu thương — Tài xế</title>
+<meta name="theme-color" content="#F3F3F0">
+<title>Xe cứu thương</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Roboto+Condensed:wght@700&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="wrap">
 
-  <!-- Trạng thái hiện tại -->
   <div class="card">
-    <div class="status-line">
-      <span class="dot" id="dot"></span>
-      <div style="flex:1">
-        <div style="font-size:24px;font-weight:800" id="vehName">—</div>
-        <div class="veh-plate" id="vehPlate"></div>
+    <div class="veh-top">
+      <div>
+        <div class="veh-title" id="vehName">-</div>
+        <span id="vehPlate"></span>
       </div>
-      <span class="badge" id="badge">—</span>
+      <span class="pill" id="pill">-</span>
     </div>
   </div>
 
-  <!-- KHI XE RẢNH: chọn điểm đến + thời gian đi -->
+  <div class="card">
+    <div class="lbl">Tài xế</div>
+    <select class="select" id="driverSel" aria-label="Tài xế"></select>
+    <div id="driverPhone"></div>
+  </div>
+
+  <!-- Xe sẵn sàng -->
   <div class="card" id="panelAvail" style="display:none">
-    <h2>Điểm đến (tùy chọn)</h2>
+    <div class="lbl">Điểm đến</div>
     <div class="dchips" id="destChips"></div>
-    <input class="text" id="dest" placeholder="Nhập điểm đến khác…">
+    <input class="text" id="dest" placeholder="Nơi khác">
 
-    <h2 style="margin-top:20px">Thời gian đi dự kiến</h2>
+    <div class="lbl" style="margin-top:22px">Thời gian (phút)</div>
     <div class="chips" id="presetChips"></div>
-
-    <div class="field-lbl">Khác</div>
     <div class="stepper">
-      <button type="button" onclick="stepCustom(-5)">−</button>
-      <input id="customMin" type="number" inputmode="numeric" value="90" min="5" step="5">
-      <button type="button" onclick="stepCustom(5)">+</button>
+      <div class="box">
+        <button type="button" onclick="stepCustom(-5)" aria-label="Bớt 5 phút">−</button>
+        <input id="customMin" type="number" inputmode="numeric" value="90" min="5" step="5" aria-label="Số phút">
+        <button type="button" onclick="stepCustom(5)" aria-label="Thêm 5 phút">+</button>
+      </div>
       <button type="button" class="go" onclick="startCustom()">Đi</button>
     </div>
   </div>
 
-  <!-- KHI XE ĐANG ĐI: đếm ngược + Về -->
+  <!-- Xe đang đi -->
   <div class="card" id="panelBusy" style="display:none">
-    <div class="count-block" id="countBlock">
+    <div class="count" id="countBlock">
       <div class="count-num" id="countNum">--:--</div>
-      <div class="count-cap" id="countCap">còn lại đến dự kiến về</div>
+      <div class="count-sub" id="tripInfo"></div>
     </div>
-    <div class="sub" id="tripInfo"></div>
-
-    <button class="btn home" style="margin-top:16px" onclick="goHome()">ĐÃ VỀ</button>
+    <div class="adj">
+      <button class="btn plus" id="btnPlus" onclick="adjust(1)">+10 phút</button>
+      <button class="btn minus" id="btnMinus" onclick="adjust(-1)">−10</button>
+    </div>
+    <button class="btn home" onclick="goHome()">ĐÃ VỀ</button>
   </div>
 
   <div class="foot" id="foot"></div>
 </div>
 
-<!-- Firebase SDK (bỏ qua vô hại khi chạy demo) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="config.js"></script>
 <script src="store.js"></script>
+<script src="ui.js"></script>
 <script>
-var CFG=window.APP_CONFIG;
-document.getElementById("foot").textContent=CFG.unit;
+var CFG=window.APP_CONFIG, $=function(id){return document.getElementById(id);}, current=null;
+$("foot").textContent=CFG.unit;
 
-/* ----- xác định xe từ ?id= ----- */
-var params=new URLSearchParams(location.search);
-var vehId=params.get("id")||CFG.vehicles[0].id;
-var vehCfg=CFG.vehicles.filter(function(v){return v.id===vehId;})[0];
-if(!vehCfg){
-  document.body.innerHTML='<div class="wrap"><div class="card"><h2>Không tìm thấy xe</h2>'
-    +'<p>Mã QR chưa đúng: <code>?id='+vehId+'</code></p></div></div>';
-  throw new Error("unknown vehicle");
+/* ----- xe từ ?id= (danh sách xe lấy từ cài đặt, có thể đổi bất cứ lúc nào) ----- */
+var vehId=new URLSearchParams(location.search).get("id")||"xe1";
+var vehCfg=null, opened=false;
+
+var STEP=CFG.extendStep||10;
+$("btnPlus").textContent="+"+STEP+" phút";
+$("btnMinus").textContent="−"+STEP;
+$("customMin").value=CFG.customDefault||90;
+
+/* ----- tài xế ----- */
+var drvSel=$("driverSel");
+function fillDrivers(cur){
+  var list=UI.drivers().map(function(d){return d.name;});
+  if(cur && list.indexOf(cur)<0) list.push(cur);
+  drvSel.innerHTML='<option value="">Chọn tài xế</option>'
+    +list.map(function(n){return '<option>'+UI.esc(n)+'</option>';}).join("");
+  drvSel.value=cur||"";
+  showPhone();
 }
-document.title=vehCfg.label;
-document.getElementById("vehName").textContent=vehCfg.label;
-document.getElementById("vehPlate").textContent=vehCfg.plate||"";
-
-/* ----- ô "Khác" mặc định ----- */
-document.getElementById("customMin").value = CFG.customDefault || 90;
-
-/* ----- gợi ý điểm đến ----- */
-var destEl=document.getElementById("dest");
-var dchipsEl=document.getElementById("destChips");
-(CFG.destinations||[]).forEach(function(name){
-  var b=document.createElement("button");
-  b.className="dchip"; b.textContent=name;
-  b.onclick=function(){
-    destEl.value = (destEl.value.trim()===name) ? "" : name;
-    syncDestChips();
-  };
-  dchipsEl.appendChild(b);
+function showPhone(){ $("driverPhone").innerHTML=UI.phoneHTML(drvSel.value); }
+fillDrivers("");
+drvSel.addEventListener("change",function(){
+  drvSel.classList.remove("need"); showPhone();
+  Store.setDriver(vehId,drvSel.value);
 });
-destEl.addEventListener("input", syncDestChips);
-function syncDestChips(){
-  var v=destEl.value.trim();
-  Array.prototype.forEach.call(dchipsEl.children,function(b){
-    b.classList.toggle("on", b.textContent===v);
+
+/* ----- điểm đến ----- */
+var destEl=$("dest"), dchipsEl=$("destChips");
+function buildDest(){
+  dchipsEl.innerHTML="";
+  (CFG.destinations||[]).forEach(function(name){
+    var b=document.createElement("button");
+    b.className="dchip"; b.textContent=name;
+    b.onclick=function(){ destEl.value=(destEl.value.trim()===name)?"":name; syncDest(); };
+    dchipsEl.appendChild(b);
   });
+  syncDest();
+}
+destEl.addEventListener("input",syncDest);
+function syncDest(){
+  var v=destEl.value.trim();
+  Array.prototype.forEach.call(dchipsEl.children,function(b){ b.classList.toggle("on",b.textContent===v); });
 }
 
-/* ----- dựng chip mốc thời gian (bấm là ĐI ngay) ----- */
-var chipsEl=document.getElementById("presetChips");
+/* ----- thời gian ----- */
 CFG.presets.forEach(function(m){
   var b=document.createElement("button");
-  b.className="chip"; b.innerHTML=m+' <small>phút</small>';
+  b.className="chip"; b.innerHTML=m+'<small>ph</small>';
   b.onclick=function(){ start(m); };
-  chipsEl.appendChild(b);
+  $("presetChips").appendChild(b);
 });
+function stepCustom(d){
+  var el=$("customMin"), v=(parseInt(el.value,10)||0)+d; el.value=v<5?5:v;
+}
 
 /* ----- hành động ----- */
-function stepCustom(d){
-  var el=document.getElementById("customMin");
-  var v=(parseInt(el.value,10)||0)+d; if(v<5)v=5; el.value=v;
+function start(min){
+  if(!drvSel.value){
+    drvSel.classList.add("need"); drvSel.focus();
+    UI.toast("Chọn tài xế"); return;
+  }
+  Store.startTrip(vehId,min,destEl.value.trim(),drvSel.value).then(function(ok){
+    if(ok){ destEl.value=""; syncDest(); }
+  });
 }
-function start(min){ Store.startTrip(vehId,min,destEl.value.trim()); }
 function startCustom(){
-  var v=parseInt(document.getElementById("customMin").value,10);
-  if(!v||v<5){alert("Nhập số phút hợp lệ (≥5).");return;}
+  var v=parseInt($("customMin").value,10);
+  if(!v||v<5){ UI.toast("Tối thiểu 5 phút"); return; }
   start(v);
+}
+var adjBusy=false;
+function adjust(sign){
+  if(adjBusy) return; adjBusy=true;
+  (sign>0?Store.extendTrip(vehId,STEP):Store.shortenTrip(vehId,STEP)).then(function(ok){
+    if(ok) UI.toast((sign>0?"+":"−")+STEP+" phút");
+    setTimeout(function(){adjBusy=false;},600);
+  });
 }
 function goHome(){ Store.endTrip(vehId); }
 
-/* ----- render theo trạng thái ----- */
-var current=null;
-function pad(n){return (n<10?"0":"")+n;}
-Store.subscribeAll(function(map){ current=map[vehId]; render(); });
-
+/* ----- hiển thị ----- */
+Store.subscribeAll(function(map){
+  current=map[vehId];
+  if(current && document.activeElement!==drvSel && drvSel.value!==(current.driver||"")) fillDrivers(current.driver||"");
+  render();
+});
 function render(){
-  if(!current) return;
+  if(!current||!vehCfg) return;
   var busy=current.status==="busy";
-  document.getElementById("panelAvail").style.display=busy?"none":"block";
-  document.getElementById("panelBusy").style.display=busy?"block":"none";
-
-  var dot=document.getElementById("dot"), badge=document.getElementById("badge");
-  if(!busy){
-    dot.className="dot available"; badge.className="badge available"; badge.textContent="Sẵn sàng";
-  }else{
-    var late=Date.now()>current.returnAt;
-    dot.className="dot "+(late?"late":"busy");
-    badge.className="badge "+(late?"late":"busy");
-    badge.textContent=late?"Quá giờ":"Đang đi";
-    var d=new Date(current.departAt);
-    document.getElementById("tripInfo").innerHTML=
-      "Xuất phát "+pad(d.getHours())+":"+pad(d.getMinutes())
-      +" · dự kiến đi "+current.etaMinutes+" phút"
-      +(current.destination?(" · "+current.destination):"");
-  }
+  $("panelAvail").style.display=busy?"none":"block";
+  $("panelBusy").style.display=busy?"block":"none";
+  if(busy) $("tripInfo").textContent=UI.hm(current.departAt)+"  →  "+UI.hm(current.returnAt);
+  tick();
 }
-
-/* ----- đồng hồ đếm ngược mỗi giây ----- */
-setInterval(function(){
-  if(!current||current.status!=="busy") return;
-  var diff=current.returnAt-Date.now();
-  var late=diff<0; var s=Math.floor(Math.abs(diff)/1000);
-  var mm=Math.floor(s/60), ss=s%60;
-  document.getElementById("countNum").textContent=(late?"+":"")+pad(mm)+":"+pad(ss);
-  document.getElementById("countCap").textContent=late?"đã quá giờ dự kiến về":"còn lại đến dự kiến về";
-  document.getElementById("countBlock").className="count-block"+(late?" late":"");
-},1000);
+function tick(){
+  if(!current||!vehCfg) return;
+  var pill=$("pill");
+  if(current.status!=="busy"){ pill.className="pill available"; pill.textContent="Sẵn sàng"; return; }
+  var diff=current.returnAt-Date.now(), late=diff<0;
+  pill.className="pill "+(late?"late":"busy");
+  pill.textContent=current.destination||"Đang đi";
+  $("countNum").textContent=UI.countdown(diff);
+  $("countBlock").className="count"+(late?" late":"");
+  $("btnMinus").disabled=late;
+}
+Store.onSettings(function(){
+  vehCfg=CFG.vehicles.filter(function(v){return v.id===vehId;})[0];
+  if(!vehCfg){
+    document.querySelector(".wrap").innerHTML='<div class="card"><b>Không tìm thấy xe</b></div>';
+    return;
+  }
+  document.title=vehCfg.label;
+  $("vehName").textContent=vehCfg.label;
+  $("vehPlate").innerHTML=UI.plateHTML(vehCfg.plate);
+  if(document.activeElement!==drvSel) fillDrivers(current?current.driver||"":drvSel.value);
+  buildDest();
+  if(!opened){ opened=true; Store.logOpen(vehId); }
+});
+setInterval(tick,1000);
 </script>
 </body>
 </html>

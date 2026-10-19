@@ -1,5 +1,5 @@
 /* =========================================================================
-   CẤU HÌNH — chỉ cần sửa file này.
+   CẤU HÌNH - chỉ cần sửa file này.
    Sau khi tạo project Firebase (xem README.md), dán khối firebaseConfig
    mà Firebase cho bạn vào đây, thay cho phần "PASTE_...".
    Khi chưa dán, hệ thống tự chạy CHẾ ĐỘ DEMO (lưu trên trình duyệt) để xem thử.
@@ -19,11 +19,31 @@ window.APP_CONFIG = {
     measurementId:     "G-MGPWCY7H0Q"
   },
 
-  // --- Danh sách xe. Đổi nhãn/biển số theo thực tế. ---
+  // Email chủ project: đăng nhập trang Nhật ký bằng email này để sửa xe, tài xế,
+  // điểm đến và cấp quyền xem nhật ký. Phải trùng với email trong database.rules.json.
+  ownerEmail: "(email đã ẩn)",
+
+  // --- Giá trị MẶC ĐỊNH (chỉ dùng khi chưa lưu cài đặt trên trang Nhật ký) ---
   vehicles: [
-    { id: "xe1", label: "Xe 1", plate: "" },
-    { id: "xe2", label: "Xe 2", plate: "" }
+    { id: "xe1", label: "Xe 1", plate: "50A-01214" },
+    { id: "xe2", label: "Xe 2", plate: "50A-01811" },
+    { id: "xe3", label: "Xe 3", plate: "50A-01848" }
   ],
+
+  // Màu biển số: "white" (nền trắng, chữ đen) | "blue" (nền xanh, chữ trắng)
+  plateStyle: "white",
+
+  // --- Tài xế: tên + số điện thoại ---
+  drivers: [
+    { name: "Lê Nguyễn Hoàng Vũ",       phone: "(đã ẩn)" },
+    { name: "Nguyễn Lương Hoàng Chung", phone: "(đã ẩn)" },
+    { name: "Nguyễn Văn Nhu",           phone: "(đã ẩn)" },
+    { name: "Trương Công Khanh",        phone: "(đã ẩn)" },
+    { name: "Trần Minh Tân",            phone: "(đã ẩn)" }
+  ],
+
+  // Số phút mỗi lần bấm +/− trên trang tài xế
+  extendStep: 10,
 
   // --- Các mốc thời gian dự kiến (phút) hiện trên trang tài xế ---
   presets: [20, 30, 45, 60],

@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nhật ký hoạt động xe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Roboto+Condensed:wght@700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .filters{display:grid;gap:10px;grid-template-columns:1fr 1fr}
+  @media(min-width:820px){.filters{grid-template-columns:repeat(6,1fr)}}
+  .filters label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:600;color:var(--muted)}
+  .filters input,.filters select{width:100%;border:none;background:var(--field);border-radius:12px;
+    padding:11px 12px;font-size:14px;color:var(--ink);font-family:inherit}
+  .filters input:focus,.filters select:focus{outline:2px solid var(--ink);outline-offset:-2px}
+  .quick{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;align-items:center}
+  .quick .dchip{padding:8px 13px;font-size:13px}
+  .quick .spacer{flex:1}
+  .chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);font-weight:600;cursor:pointer}
+  .btn.sm{display:inline-block;width:auto;font-size:13px;padding:10px 16px;border-radius:12px}
+
+  .stats{display:grid;gap:10px;grid-template-columns:repeat(2,1fr);margin-bottom:12px}
+  @media(min-width:820px){.stats{grid-template-columns:repeat(5,1fr)}}
+  .stat{background:var(--surface);border-radius:18px;padding:16px 18px}
+  .stat .v{font-size:30px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1}
+  .stat .k{font-size:12px;font-weight:600;color:var(--muted);margin-top:6px}
+  .stat.warn .v{color:var(--late)}
+  .stat.amber .v{color:var(--run)}
+
+  .tbl-wrap{overflow:auto;border-radius:var(--radius)}
+  table.log{width:100%;border-collapse:collapse;font-size:14px}
+  table.log th{position:sticky;top:0;background:var(--surface);text-align:left;font-size:12px;font-weight:600;
+    color:var(--muted);padding:14px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  table.log td{padding:12px;border-bottom:1px solid var(--line);vertical-align:top}
+  table.log tr:last-child td{border-bottom:none}
+  table.log tr.day td{background:var(--field);font-weight:700;font-size:12px;letter-spacing:.06em;padding:8px 12px}
+  .t-time{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}
+  .t-warn{display:block;font-size:11px;color:var(--run-ink);font-weight:600}
+  .t-veh{white-space:nowrap}
+  .t-veh b{display:block;margin-bottom:5px}
+  .t-dev{font-size:12px;color:var(--muted)}
+  .act{display:inline-block;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;white-space:nowrap}
+  .act.start{background:var(--run-soft);color:var(--run-ink)}
+  .act.extend{background:#FFF4D6;color:#8A5A00}
+  .act.shorten{background:#EDEBFF;color:#4C3FBF}
+  .act.end{background:var(--go-soft);color:var(--go-ink)}
+  .act.driver{background:#E5EEFC;color:#1D57AE}
+  .act.open{background:var(--field);color:var(--muted)}
+  .act.settings{background:var(--ink);color:#fff}
+  .act.access{background:#F1E8FD;color:#7E22CE}
+  .late{color:var(--late);font-weight:700}
+  .ontime{color:var(--go-ink);font-weight:700}
+  .empty{text-align:center;color:var(--muted);padding:34px 10px}
+
+  @media(max-width:700px){
+    table.log thead{display:none}
+    table.log, table.log tbody, table.log tr, table.log td{display:block;width:100%}
+    table.log tr{padding:10px 4px;border-bottom:1px solid var(--line)}
+    table.log tr.day{padding:0}
+    table.log td{border:none;padding:3px 10px}
+    .t-veh b{display:inline;margin-right:6px}
+  }
+
+  /* đăng nhập + tab + cài đặt */
+  .who{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);font-weight:600}
+  .who button{border:none;background:var(--surface);border-radius:999px;padding:8px 13px;font-weight:600;cursor:pointer;font-size:13px}
+  .gate{text-align:center;padding:48px 20px}
+  .gate h2{font-size:22px;letter-spacing:-.02em;margin:0 0 8px}
+  .gate p{color:var(--muted);margin:0 0 22px;font-size:15px}
+  .gbtn{display:inline-flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--surface);
+    border-radius:999px;padding:13px 22px;font-size:16px;font-weight:600;cursor:pointer;color:var(--ink)}
+  .gbtn:hover{border-color:var(--ink)}
+  .tabs{display:inline-flex;background:var(--surface);border-radius:999px;padding:4px;margin-bottom:14px;gap:2px}
+  .tabs button{border:none;background:transparent;border-radius:999px;padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer;color:var(--muted)}
+  .tabs button.on{background:var(--ink);color:#fff}
+  .sgrid{display:grid;gap:12px;grid-template-columns:1fr}
+  @media(min-width:900px){.sgrid{grid-template-columns:1fr 1fr}}
+  .shead{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .shead h3{margin:0;font-size:17px;letter-spacing:-.01em}
+  .shead a{font-size:13px;font-weight:600;color:var(--ink)}
+  .erow{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+  .erow input{flex:1;min-width:0;border:none;background:var(--field);border-radius:12px;padding:12px;font-size:15px;color:var(--ink);font-family:inherit}
+  .erow input.narrow{flex:0 0 38%}
+  .erow input:focus{outline:2px solid var(--ink);outline-offset:-2px}
+  .erow .tag{flex:0 0 auto;font-size:11px;color:var(--muted);font-weight:600;width:34px}
+  .x{flex:none;width:40px;height:40px;border:none;border-radius:12px;background:var(--field);color:var(--muted);font-size:20px;cursor:pointer}
+  .x:hover{background:var(--late-soft);color:var(--late)}
+  .add{border:1.5px dashed var(--line);background:transparent;border-radius:12px;padding:11px;width:100%;font-weight:600;font-size:14px;cursor:pointer;color:var(--muted);font-family:inherit}
+  .add:hover{border-color:var(--ink);color:var(--ink)}
+  .savebar{position:sticky;bottom:12px;display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+  .savebar .btn{width:auto;padding:14px 22px;font-size:15px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+  .savebar .btn.ghost{background:var(--surface);color:var(--ink)}
+  .em{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);font-size:15px}
+  .em:last-of-type{border-bottom:none}
+  .em small{color:var(--muted);font-weight:600}
+  .em button{border:none;background:var(--field);border-radius:10px;padding:8px 12px;font-weight:600;cursor:pointer;font-family:inherit}
+  .em button:hover{background:var(--late-soft);color:var(--late)}
+</style>
+</head>
+<body class="dash">
+<div class="wrap">
+
+  <div class="appbar">
+    <a class="navlink" href="index.html">‹</a>
+    <h1>Nhật ký</h1>
+    <div class="who" id="who"></div>
+  </div>
+
+  <div class="card gate" id="gate" hidden></div>
+
+  <div class="tabs" id="tabs" hidden>
+    <button class="on" data-tab="log">Nhật ký</button>
+    <button data-tab="set">Cài đặt</button>
+  </div>
+
+  <div id="viewSet" hidden>
+    <div class="sgrid">
+      <div class="card">
+        <div class="shead"><h3>Xe</h3><a href="qr.html" target="_blank">In mã QR</a></div>
+        <div id="edVeh"></div>
+        <button class="add" data-add="veh">+ Thêm xe</button>
+      </div>
+      <div class="card">
+        <div class="shead"><h3>Tài xế</h3></div>
+        <div id="edDrv"></div>
+        <button class="add" data-add="drv">+ Thêm tài xế</button>
+      </div>
+      <div class="card">
+        <div class="shead"><h3>Điểm đến nhanh</h3></div>
+        <div id="edDst"></div>
+        <button class="add" data-add="dst">+ Thêm điểm đến</button>
+      </div>
+      <div class="card">
+        <div class="shead"><h3>Quyền xem nhật ký</h3></div>
+        <div id="viewers"></div>
+        <div class="erow" style="margin-top:12px">
+          <input type="email" id="newViewer" placeholder="email@gmail.com" autocomplete="off">
+          <button class="btn sm" id="btnAddViewer">Thêm</button>
+        </div>
+      </div>
+    </div>
+    <div class="savebar" id="savebar" hidden>
+      <button class="btn ghost" id="btnUndo">Hủy</button>
+      <button class="btn" id="btnSave">Lưu thay đổi</button>
+    </div>
+  </div>
+
+  <div id="viewLog" hidden>
+  <div class="card">
+    <div class="filters">
+      <label>Từ ngày <input type="date" id="fFrom"></label>
+      <label>Đến ngày <input type="date" id="fTo"></label>
+      <label>Xe <select id="fVeh"><option value="">Tất cả</option></select></label>
+      <label>Tài xế <select id="fDrv"><option value="">Tất cả</option></select></label>
+      <label>Hành động
+        <select id="fAct">
+          <option value="">Tất cả</option>
+          <option value="start">Xuất phát</option>
+          <option value="extend">+ phút</option>
+          <option value="shorten">− phút</option>
+          <option value="end">Đã về</option>
+          <option value="driver">Đổi tài xế</option>
+          <option value="open">Mở trang xe</option>
+          <option value="settings">Cài đặt</option>
+          <option value="access">Quyền xem</option>
+        </select>
+      </label>
+      <label>Tìm <input type="search" id="fQ"></label>
+    </div>
+    <div class="quick">
+      <button class="dchip" data-range="0">Hôm nay</button>
+      <button class="dchip" data-range="1">Hôm qua</button>
+      <button class="dchip" data-range="7">7 ngày</button>
+      <button class="dchip" data-range="30">30 ngày</button>
+      <label class="chk"><input type="checkbox" id="fHideOpen"> Ẩn lượt mở trang</label>
+      <span class="spacer"></span>
+      <button class="btn sm" id="btnCsv">Xuất Excel</button>
+    </div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="card" style="padding:0">
+    <div class="tbl-wrap">
+      <table class="log">
+        <thead><tr>
+          <th>Thời gian</th><th>Xe</th><th>Hành động</th><th>Tài xế</th><th>Chi tiết</th><th>Thiết bị</th>
+        </tr></thead>
+        <tbody id="rows"><tr><td colspan="6" class="empty">Đang tải…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  </div>
+
+  <div class="foot" id="foot"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="config.js"></script>
+<script>window.APP_AUTH="google";</script>
+<script src="store.js"></script>
+<script src="ui.js"></script>
+<script>
+var CFG=window.APP_CONFIG, esc=UI.esc, pad=UI.pad;
+document.getElementById("foot").textContent=CFG.unit+(window.STORE_MODE==="demo"?" · CHẾ ĐỘ DEMO":"");
+
+var ACT={start:"Xuất phát",extend:"+ phút",shorten:"− phút",end:"Đã về",driver:"Đổi tài xế",open:"Mở trang xe",settings:"Cài đặt",access:"Quyền xem"};
+var $=function(id){return document.getElementById(id);};
+
+/* ----- dựng ô lọc ----- */
+function fillVehFilter(){
+  var cur=$("fVeh").value;
+  $("fVeh").innerHTML='<option value="">Tất cả</option>'+CFG.vehicles.map(function(v){
+    return '<option value="'+esc(v.id)+'">'+esc(v.label+(v.plate?" · "+v.plate:""))+'</option>';
+  }).join("");
+  $("fVeh").value=cur;
+}
+function fillDriverFilter(extra){
+  var cur=$("fDrv").value, set={};
+  UI.drivers().map(function(d){return d.name;}).concat(extra||[]).forEach(function(n){ if(n) set[n]=1; });
+  $("fDrv").innerHTML='<option value="">Tất cả</option>'
+    +Object.keys(set).map(function(n){return '<option>'+esc(n)+'</option>';}).join("");
+  $("fDrv").value=cur;
+}
+
+function ymd(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());}
+function setRange(days){
+  var to=new Date(), from=new Date();
+  if(days===1){ from.setDate(from.getDate()-1); to=new Date(from); }
+  else from.setDate(from.getDate()-(days?days-1:0));
+  $("fFrom").value=ymd(from); $("fTo").value=ymd(to); load();
+}
+Array.prototype.forEach.call(document.querySelectorAll("[data-range]"),function(b){
+  b.onclick=function(){ setRange(parseInt(b.getAttribute("data-range"),10)); };
+});
+
+/* ----- tải dữ liệu theo khoảng ngày (theo dõi realtime) ----- */
+var logs=[], unsub=null;
+function load(){
+  var f=$("fFrom").value, t=$("fTo").value;
+  var from=new Date(f+"T00:00:00").getTime(), to=new Date(t+"T23:59:59.999").getTime();
+  if(isNaN(from)||isNaN(to)) return;
+  if(unsub) unsub();
+  $("rows").innerHTML='<tr><td colspan="6" class="empty">Đang tải…</td></tr>';
+  unsub=Store.subscribeLogs(from,to,function(arr,err){
+    if(err){ denied(); return; }
+    showApp();
+    logs=arr.sort(function(a,b){return b.ts-a.ts;});
+    fillDriverFilter(logs.map(function(e){return e.driver;}));
+    render();
+  });
+}
+["fFrom","fTo"].forEach(function(id){ $(id).addEventListener("change",load); });
+["fVeh","fDrv","fAct","fHideOpen"].forEach(function(id){ $(id).addEventListener("change",render); });
+$("fQ").addEventListener("input",render);
+
+/* ----- lọc ----- */
+function filtered(){
+  var v=$("fVeh").value, d=$("fDrv").value, a=$("fAct").value, q=$("fQ").value.trim().toLowerCase(), hide=$("fHideOpen").checked;
+  return logs.filter(function(e){
+    if(v && e.vehicle!==v) return false;
+    if(d && e.driver!==d && e.prevDriver!==d) return false;
+    if(a && e.action!==a) return false;
+    if(hide && !a && e.action==="open") return false;
+    if(q){
+      var hay=[e.label,e.plate,e.driver,e.prevDriver,e.destination,e.device,e.uid,detail(e,true)].join(" ").toLowerCase();
+      if(hay.indexOf(q)<0) return false;
+    }
+    return true;
+  });
+}
+
+/* ----- mô tả chi tiết từng hành động ----- */
+function detail(e,plain){
+  var s="";
+  switch(e.action){
+    case "start":
+      s="Đi "+e.etaMinutes+" phút, về dự kiến "+UI.hm(e.returnAt)+(e.destination?" · đến "+e.destination:"");
+      break;
+    case "extend": case "shorten":
+      s=(e.addMinutes>0?"+":"")+e.addMinutes+" phút: về dự kiến "+UI.hm(e.prevReturnAt)+" → "+UI.hm(e.returnAt)
+        +(e.wasLate?" · khi đã trễ":"");
+      break;
+    case "end":
+      var late=e.lateMin>0;
+      s="Chuyến "+UI.hm(e.departAt)+" → "+UI.hm(e.actualReturnAt)+": đi "+e.durationMin+" phút (dự kiến "+e.etaMinutes+")"
+        +" · "+(plain?(late?"trễ "+e.lateMin+" phút":"đúng giờ")
+          :(late?'<span class="late">trễ '+e.lateMin+' phút</span>':'<span class="ontime">đúng giờ</span>'))
+        +(e.destination?" · "+e.destination:"");
+      return plain?s:s.replace(/(<span[^>]*>[^<]*<\/span>)|([^<]+)/g,function(m,tag,txt){return tag||esc(txt);});
+    case "driver":
+      s=(e.prevDriver||"(chưa chọn)")+" → "+(e.driver||"(bỏ chọn)")+(e.wasBusy?" · khi xe đang đi":"");
+      break;
+    case "open":
+      s=e.status==="busy"?"Xe đang đi":"Xe sẵn sàng";
+      break;
+    case "settings": case "access":
+      s=e.note||"";
+      break;
+  }
+  return plain?s:esc(s);
+}
+
+/* ----- vẽ bảng + thống kê ----- */
+function render(){
+  var rows=filtered(), html="", lastDay="";
+  rows.forEach(function(e){
+    var day=UI.dmy(e.ts);
+    if(day!==lastDay){ html+='<tr class="day"><td colspan="6">'+day+'</td></tr>'; lastDay=day; }
+    var skew=(typeof e.serverTs==="number" && Math.abs(e.serverTs-e.ts)>60000)
+      ?'<span class="t-warn" title="Giờ máy chủ: '+UI.dmy(e.serverTs)+' '+UI.hms(e.serverTs)+'">giờ điện thoại lệch '+Math.round((e.ts-e.serverTs)/60000)+' phút</span>':"";
+    html+='<tr>'
+      +'<td class="t-time">'+UI.hms(e.ts)+skew+'</td>'
+      +'<td class="t-veh"><b>'+esc(e.label||e.vehicle)+'</b>'+(e.plate?UI.plateHTML(e.plate,"sm"):"")+'</td>'
+      +'<td><span class="act '+esc(e.action)+'">'+esc(ACT[e.action]||e.action)+'</span></td>'
+      +'<td>'+esc(e.driver||"-")+'</td>'
+      +'<td>'+detail(e)+'</td>'
+      +'<td class="t-dev">'+(e.by?esc(e.by)+'<br>':'')+esc(e.device||"")+(e.uid?' · #'+esc(String(e.uid).slice(0,6)):'')+'</td>'
+      +'</tr>';
+  });
+  $("rows").innerHTML=html||'<tr><td colspan="6" class="empty">Không có hoạt động nào trong khoảng này.</td></tr>';
+
+  var ends=rows.filter(function(e){return e.action==="end";});
+  var mins=ends.reduce(function(s,e){return s+(e.durationMin||0);},0);
+  var lates=ends.filter(function(e){return e.lateMin>0;}).length;
+  var exts=rows.filter(function(e){return e.action==="extend";}).length;
+  var starts=rows.filter(function(e){return e.action==="start";}).length;
+  $("stats").innerHTML=
+     stat(starts,"Lượt xuất phát")
+    +stat(ends.length,"Chuyến đã về")
+    +stat(Math.floor(mins/60)+"g"+pad(mins%60),"Tổng thời gian đi")
+    +stat(exts,"Lần +"+(CFG.extendStep||10)+" phút","amber")
+    +stat(lates+(ends.length?' <small style="font-size:13px">/ '+ends.length+'</small>':""),"Chuyến về trễ","warn");
+}
+function stat(v,k,cls){return '<div class="stat '+(cls||"")+'"><div class="v">'+v+'</div><div class="k">'+k+'</div></div>';}
+
+/* ----- xuất CSV (mở được bằng Excel, giữ tiếng Việt) ----- */
+$("btnCsv").onclick=function(){
+  var rows=filtered().slice().reverse();
+  var head=["Ngày","Giờ","Xe","Biển số","Hành động","Tài xế","Tài xế trước","Điểm đến","Phút dự kiến",
+    "Xuất phát","Về dự kiến","Về dự kiến trước đó","Phút cộng/bớt","Số lần gia hạn","Về thực tế",
+    "Thời gian đi (phút)","Trễ (phút)","Chi tiết","Thiết bị","Mã thiết bị","Người thao tác","Mã chuyến","Giờ máy chủ"];
+  function t(ms){return ms?UI.hm(ms):"";}
+  var lines=[head].concat(rows.map(function(e){
+    return [UI.dmy(e.ts),UI.hms(e.ts),e.label,e.plate,ACT[e.action]||e.action,e.driver,e.prevDriver,e.destination,
+      e.etaMinutes,t(e.departAt),t(e.returnAt),t(e.prevReturnAt),e.addMinutes,e.extendCount,t(e.actualReturnAt),
+      e.durationMin,e.lateMin,detail(e,true),e.device,e.uid,e.by,e.tripId,
+      typeof e.serverTs==="number"?UI.dmy(e.serverTs)+" "+UI.hms(e.serverTs):""];
+  })).map(function(r){
+    return r.map(function(c){ c=(c==null?"":String(c)); return /[",\n;]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c; }).join(",");
+  });
+  var blob=new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="nhat-ky-xe_"+$("fFrom").value+"_"+$("fTo").value+".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+};
+
+/* ===================== Đăng nhập + phân quyền ===================== */
+var started=false, appShown=false;
+var GICON='<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
+function gate(html){ $("gate").innerHTML=html; $("gate").hidden=false; $("viewLog").hidden=true; $("viewSet").hidden=true; $("tabs").hidden=true; }
+function loginGate(){
+  gate('<h2>Nhật ký xe</h2><p>Đăng nhập để xem</p><button class="gbtn" id="btnLogin">'+GICON+'Đăng nhập Google</button>');
+  $("btnLogin").onclick=function(){ Store.signInGoogle(); };
+}
+function denied(){
+  var u=Store.user||{};
+  gate('<h2>Chưa có quyền</h2><p>'+esc(u.email||"")+'</p><button class="gbtn" id="btnOut">Đổi tài khoản</button>');
+  $("btnOut").onclick=function(){ Store.signOut(); };
+}
+function showApp(){
+  if(appShown) return; appShown=true;
+  $("gate").hidden=true;
+  $("tabs").hidden=!Store.isOwner();
+  switchTab("log");
+}
+function switchTab(t){
+  Array.prototype.forEach.call($("tabs").children,function(b){ b.classList.toggle("on",b.getAttribute("data-tab")===t); });
+  $("viewLog").hidden=t!=="log"; $("viewSet").hidden=t!=="set";
+}
+Array.prototype.forEach.call($("tabs").children,function(b){ b.onclick=function(){ switchTab(b.getAttribute("data-tab")); }; });
+
+
+/* ===================== Cài đặt (chủ project) ===================== */
+var draft=null, dirty=false, adminStarted=false;
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+function resetDraft(){
+  draft={ vehicles:clone(CFG.vehicles||[]), drivers:clone(UI.drivers()), destinations:clone(CFG.destinations||[]) };
+  setDirty(false); drawEditors();
+}
+function setDirty(v){ dirty=v; $("savebar").hidden=!v; }
+function inp(val,ph,cls,on){
+  var i=document.createElement("input"); i.value=val||""; i.placeholder=ph; if(cls) i.className=cls;
+  i.oninput=function(){ on(i.value); setDirty(true); }; return i;
+}
+function xbtn(on){ var b=document.createElement("button"); b.className="x"; b.textContent="×"; b.title="Xóa"; b.onclick=on; return b; }
+function row(){ var d=document.createElement("div"); d.className="erow"; for(var i=0;i<arguments.length;i++) d.appendChild(arguments[i]); return d; }
+function drawEditors(){
+  if(!draft) return;
+  var ev=$("edVeh"); ev.innerHTML="";
+  draft.vehicles.forEach(function(v,i){
+    var tag=document.createElement("span"); tag.className="tag"; tag.textContent=v.id;
+    ev.appendChild(row(tag,
+      inp(v.label,"Tên xe","",function(x){v.label=x;}),
+      inp(v.plate,"Biển số","narrow",function(x){v.plate=x;}),
+      xbtn(function(){
+        var st=(lastVeh[v.id]||{}).status;
+        if(st==="busy" && !confirm(v.label+" đang đi. Vẫn xóa?")) return;
+        draft.vehicles.splice(i,1); setDirty(true); drawEditors();
+      })));
+  });
+  var ed=$("edDrv"); ed.innerHTML="";
+  draft.drivers.forEach(function(d,i){
+    var ph=inp(d.phone,"Số điện thoại","narrow",function(x){d.phone=x;}); ph.type="tel"; ph.inputMode="tel";
+    ed.appendChild(row(inp(d.name,"Họ tên","",function(x){d.name=x;}),ph,
+      xbtn(function(){ draft.drivers.splice(i,1); setDirty(true); drawEditors(); })));
+  });
+  var es=$("edDst"); es.innerHTML="";
+  draft.destinations.forEach(function(x,i){
+    es.appendChild(row(inp(x,"Tên nơi đến","",function(v){draft.destinations[i]=v;}),
+      xbtn(function(){ draft.destinations.splice(i,1); setDirty(true); drawEditors(); })));
+  });
+}
+function nextVehId(){
+  var used={}; draft.vehicles.concat(CFG.vehicles).forEach(function(v){used[v.id]=1;});
+  Object.keys(lastVeh).forEach(function(k){used[k]=1;});
+  for(var n=1;;n++){ if(!used["xe"+n]) return "xe"+n; }
+}
+Array.prototype.forEach.call(document.querySelectorAll("[data-add]"),function(b){
+  b.onclick=function(){
+    var k=b.getAttribute("data-add");
+    if(k==="veh"){ var id=nextVehId(); draft.vehicles.push({id:id,label:"Xe "+id.replace(/\D/g,""),plate:""}); }
+    if(k==="drv") draft.drivers.push({name:"",phone:""});
+    if(k==="dst") draft.destinations.push("");
+    setDirty(true); drawEditors();
+    var box={veh:"edVeh",drv:"edDrv",dst:"edDst"}[k], ins=$(box).querySelectorAll("input");
+    var last=ins[k==="veh"?ins.length-2:k==="drv"?ins.length-2:ins.length-1]; if(last){ last.focus(); last.select(); }
+  };
+});
+$("btnUndo").onclick=function(){ resetDraft(); };
+$("btnSave").onclick=function(){
+  var vs=draft.vehicles.filter(function(v){return v.label.trim();});
+  if(!vs.length){ UI.toast("Cần ít nhất 1 xe"); return; }
+  var bad=draft.drivers.filter(function(d){ return d.name.trim() && d.phone && !/^\+?\d{9,12}$/.test(d.phone.replace(/[\s.-]/g,"")); });
+  if(bad.length){ UI.toast("Số điện thoại chưa đúng: "+bad[0].name); return; }
+  var b=$("btnSave"); b.disabled=true;
+  Store.saveSettings(draft).then(function(){ setDirty(false); UI.toast("Đã lưu"); resetDraft(); })
+    .catch(function(e){ UI.toast("Lưu thất bại"); console.error(e); })
+    .then(function(){ b.disabled=false; });
+};
+window.addEventListener("beforeunload",function(e){ if(dirty){ e.preventDefault(); e.returnValue=""; } });
+
+/* trạng thái xe (để cảnh báo khi xóa xe đang đi) */
+var lastVeh={};
+
+/* ----- quyền xem nhật ký ----- */
+function drawViewers(list){
+  var html='<div class="em"><span>'+esc(CFG.ownerEmail)+'</span><small>Chủ project</small></div>';
+  list.forEach(function(v){
+    html+='<div class="em"><span>'+esc(v.email)+'</span><button data-rm="'+esc(v.email)+'">Thu hồi</button></div>';
+  });
+  $("viewers").innerHTML=html;
+  Array.prototype.forEach.call($("viewers").querySelectorAll("[data-rm]"),function(b){
+    b.onclick=function(){
+      var em=b.getAttribute("data-rm");
+      if(!confirm("Thu hồi quyền của "+em+"?")) return;
+      Store.removeViewer(em).then(function(){ UI.toast("Đã thu hồi"); });
+    };
+  });
+}
+function addViewer(){
+  var em=$("newViewer").value.trim().toLowerCase();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)){ UI.toast("Email chưa đúng"); return; }
+  if(em===String(CFG.ownerEmail).toLowerCase()){ UI.toast("Đây là email chủ project"); return; }
+  Store.addViewer(em).then(function(){ $("newViewer").value=""; UI.toast("Đã cấp quyền"); })
+    .catch(function(){ UI.toast("Không lưu được"); });
+}
+$("btnAddViewer").onclick=addViewer;
+$("newViewer").addEventListener("keydown",function(e){ if(e.key==="Enter") addViewer(); });
+
+function startAdmin(){
+  if(adminStarted) return; adminStarted=true;
+  $("tabs").hidden=!appShown;
+  Store.subscribeViewers(function(list){ drawViewers(list||[]); });
+  Store.subscribeAll(function(map){ lastVeh=map; });
+}
+
+/* khởi động (đặt cuối để mọi biến đã sẵn sàng) */
+Store.onUser(function(u){
+  if(!u){
+    $("who").innerHTML=""; appShown=false; loginGate();
+    if(unsub){ unsub(); unsub=null; }
+    started=false; return;
+  }
+  $("who").innerHTML=(window.STORE_MODE==="demo"?"":'<span>'+esc(u.email||"")+'</span><button id="btnSignOut">Đăng xuất</button>');
+  if($("btnSignOut")) $("btnSignOut").onclick=function(){ Store.signOut(); };
+  if(!started){ started=true; setRange(7); }
+  if(Store.isOwner()) startAdmin();
+});
+Store.onSettings(function(){ fillVehFilter(); fillDriverFilter(); if(!dirty) resetDraft(); });
+</script>
+</body>
+</html>

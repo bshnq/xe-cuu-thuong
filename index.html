@@ -3,18 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Công xa dashboard</title>
+<title>Công xa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Roboto+Condensed:wght@700&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body class="dash">
 <div class="wrap">
 
   <div class="appbar">
-    <h1>CÔNG XA DASHBOARD</h1>
-  </div>
-
-  <div style="text-align:right;margin:0 4px 12px">
-    <span class="clock" id="clock">—</span>
+    <h1>Công xa</h1>
+    <span class="clock" id="clock">-</span>
+    <a class="navlink" href="log.html">Nhật ký</a>
   </div>
 
   <div class="fleet" id="fleet"></div>
@@ -27,71 +28,60 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="config.js"></script>
 <script src="store.js"></script>
+<script src="ui.js"></script>
 <script>
-var CFG=window.APP_CONFIG;
+var CFG=window.APP_CONFIG, esc=UI.esc;
 document.getElementById("foot").textContent=CFG.unit;
 
-function pad(n){return (n<10?"0":"")+n;}
-
-/* dựng khung mỗi xe 1 lần */
-var fleet=document.getElementById("fleet");
-var cards={};
-CFG.vehicles.forEach(function(v){
-  var el=document.createElement("div");
-  el.className="veh"; el.id="card_"+v.id;
-  el.innerHTML=
-    '<div class="veh-head"><div class="veh-name">'+v.label+'</div>'
-    +'<div class="veh-plate">'+(v.plate||"")+'</div>'
-    +'<span class="badge" data-role="badge">—</span></div>'
-    +'<div data-role="body"></div>';
-  fleet.appendChild(el);
-  cards[v.id]=el;
-});
-
+var fleet=document.getElementById("fleet"), cards={};
+function buildFleet(){
+  fleet.innerHTML=""; cards={};
+  CFG.vehicles.forEach(function(v){
+    var el=document.createElement("div");
+    el.className="veh available";
+    el.innerHTML=
+       '<div class="veh-head"><div><div class="veh-name">'+esc(v.label)+'</div>'+UI.plateHTML(v.plate)+'</div>'
+      +'<span class="pill" data-r="pill">-</span></div>'
+      +'<div class="veh-main" data-r="main"></div>'
+      +'<div class="veh-foot" data-r="foot"></div>';
+    fleet.appendChild(el);
+    cards[v.id]=el;
+  });
+}
 var state={};
+Store.onSettings(function(){ buildFleet(); render(); });
 Store.subscribeAll(function(map){ state=map; render(); });
 
+function q(el,r){ return el.querySelector('[data-r='+r+']'); }
 function render(){
   CFG.vehicles.forEach(function(v){
-    var s=state[v.id]||{status:"available"};
-    var el=cards[v.id];
-    var badge=el.querySelector('[data-role=badge]');
-    var body=el.querySelector('[data-role=body]');
+    var s=state[v.id]||{status:"available"}, el=cards[v.id]; if(!el) return;
     if(s.status!=="busy"){
-      el.className="veh available";
-      badge.textContent="Sẵn sàng";
-      body.innerHTML='<div class="avail-msg">SẴN SÀNG</div>';
+      q(el,"main").innerHTML='<div class="veh-ready">Sẵn sàng</div>';
     }else{
-      el.className="veh busy";
-      badge.textContent="Đang đi";
-      var d=new Date(s.departAt);
-      body.innerHTML=
-        '<div class="veh-big"><div class="lbl">Dự kiến về sau</div>'
-        +'<div class="val" data-role="count" data-return="'+s.returnAt+'">--:--</div></div>'
-        +'<div class="veh-eta">Xuất phát '+pad(d.getHours())+':'+pad(d.getMinutes())
-        +' · đi '+s.etaMinutes+' phút'
-        +(s.destination?(' · '+s.destination):'')+'</div>';
+      q(el,"main").innerHTML='<div class="veh-big" data-return="'+s.returnAt+'">--:--</div>'
+        +'<div class="veh-sub">'+UI.hm(s.departAt)+'  →  '+UI.hm(s.returnAt)+'</div>';
     }
+    q(el,"foot").innerHTML=s.driver
+      ?'<span class="veh-driver">'+esc(s.driver)+'</span>'+UI.phoneHTML(s.driver)
+      :'<span class="veh-driver none">Chưa có tài xế</span>';
+    el._s=s;
   });
   tick();
 }
 
-/* cập nhật đồng hồ + đếm ngược mỗi giây */
 function tick(){
   var now=new Date();
-  document.getElementById("clock").textContent=
-    pad(now.getHours())+":"+pad(now.getMinutes())+":"+pad(now.getSeconds());
-  var counts=document.querySelectorAll('[data-role=count]');
-  counts.forEach(function(c){
-    var ret=parseInt(c.getAttribute("data-return"),10);
-    var diff=ret-Date.now(); var late=diff<0;
-    var s=Math.floor(Math.abs(diff)/1000);
-    c.textContent=(late?"+":"")+pad(Math.floor(s/60))+":"+pad(s%60);
-    var card=c.closest(".veh");
-    if(card){
-      var lbl=card.querySelector('.veh-big .lbl');
-      if(lbl) lbl.textContent=late?"Đã quá giờ":"Dự kiến về sau";
-    }
+  document.getElementById("clock").textContent=UI.hm(now)+":"+UI.pad(now.getSeconds());
+  CFG.vehicles.forEach(function(v){
+    var el=cards[v.id]; if(!el) return;
+    var s=el._s||{status:"available"}, pill=q(el,"pill");
+    if(s.status!=="busy"){ el.className="veh available"; pill.style.visibility="hidden"; return; }
+    pill.style.visibility="visible";
+    var diff=s.returnAt-Date.now(), late=diff<0;
+    el.className="veh "+(late?"late":"busy");
+    pill.textContent=s.destination||"Đang đi";
+    var big=el.querySelector(".veh-big"); if(big) big.textContent=UI.countdown(diff);
   });
 }
 setInterval(tick,1000);
