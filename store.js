@@ -10,6 +10,7 @@
      Store.setDriver(id, driver)
      Store.logOpen(id)                         -> ghi nhật ký "mở trang xe"
      Store.subscribeLogs(fromMs, toMs, cb)     -> cb(mảngNhậtKý), trả về hàm hủy theo dõi
+     Store.subscribeGps(cb)                    -> cb({ idXe: {lat,lng,speed,gpsTime,address,...} })
 
    Cài đặt (xe, tài xế, điểm đến) lưu trên Firebase, chỉ chủ project sửa được:
      Store.onSettings(cb)                      -> cb() khi cài đặt tải xong / thay đổi
@@ -328,6 +329,14 @@
       self.ref.on("value", function (snap) { self._lastVeh = snap.val() || {}; self._emitVeh(); });
     });
   };
+  /* Vị trí GPS do Apps Script ghi vào "gps/<id xe>" (trình duyệt chỉ đọc) */
+  FirebaseStore.prototype.subscribeGps = function (cb) {
+    var self = this;
+    this.ready.then(function () {
+      self.db.ref("gps").on("value", function (snap) { cb(snap.val() || {}); },
+        function (err) { console.error("Đọc GPS lỗi:", err && err.message); cb({}); });
+    });
+  };
   FirebaseStore.prototype._mutate = function (id, action, args) {
     var self = this;
     return this.ready.then(function (user) {
@@ -498,6 +507,15 @@
   DemoStore.prototype.subscribeAll = function (cb) {
     this.cbs.push(cb);
     cb(this._read());
+  };
+  DemoStore.prototype.subscribeGps = function (cb) {   // demo: chưa có GPS thật
+    var h = CFG.hospital, t = nowMs(), demo = {};
+    if (h) CFG.vehicles.forEach(function (v, i) {
+      demo[v.id] = i === 0
+        ? { lat: 10.7676, lng: 106.6594, speed: 38, gpsTime: t - 40000, fetchedAt: t, address: "Lạc Long Quân, P. Bình Thới, TP. Hồ Chí Minh" }
+        : { lat: h.lat, lng: h.lng, speed: 0, gpsTime: t - 30000, fetchedAt: t, address: "" };
+    });
+    cb(demo);
   };
   DemoStore.prototype._mutate = function (id, action, args) {
     var raw = this._readRaw(), prev = Object.assign(blankVehicle(), raw[id] || {});

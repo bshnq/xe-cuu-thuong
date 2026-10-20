@@ -30,6 +30,12 @@ window.APP_CONFIG = {
     { id: "xe3", label: "Xe 3", plate: "50A-01848" }
   ],
 
+  // --- GPS (đồng bộ từ quanlyxe.vn qua Apps Script, xem apps-script/HUONG-DAN.md) ---
+  // Xe nằm trong bán kính này quanh bệnh viện thì hiện "Tại BV" thay cho địa chỉ.
+  hospital: { lat: 10.76070, lng: 106.64815, radius: 150 },
+  // Quá số phút này không có vị trí mới thì báo "mất tín hiệu".
+  gpsStaleMinutes: 5,
+
   // Màu biển số: "white" (nền trắng, chữ đen) | "blue" (nền xanh, chữ trắng)
   plateStyle: "white",
 

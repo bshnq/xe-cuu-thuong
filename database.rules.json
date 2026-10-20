@@ -14,6 +14,10 @@
         "$other":      { ".validate": false }
       }
     },
+    "gps": {
+      ".read": "auth != null",
+      ".write": false
+    },
     "history": {
       ".read": "auth != null",
       ".write": "auth != null",

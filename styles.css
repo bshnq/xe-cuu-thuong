@@ -168,3 +168,13 @@ input.text::placeholder{color:var(--muted)}
 .veh-driver{font-size:16px;font-weight:700}
 .veh-driver.none{opacity:.7;font-weight:500}
 .veh .phone{margin:0;background:rgba(255,255,255,.95);color:var(--ink)}
+
+/* Dòng vị trí GPS trên thẻ xe */
+.veh-gps{display:flex;align-items:center;gap:8px;margin:0 0 12px;padding:10px 14px;border-radius:14px;
+  background:rgba(255,255,255,.16);color:#fff;text-decoration:none;font-size:15px;font-weight:600;min-width:0}
+.veh-gps:hover{background:rgba(255,255,255,.24)}
+.veh-gps svg{flex:none;opacity:.9}
+.gps-place{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gps-meta{flex:none;font-size:13px;opacity:.85;font-variant-numeric:tabular-nums}
+.veh-gps.stale{opacity:.6}
+.veh-gps.stale .gps-meta{opacity:1}
