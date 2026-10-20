@@ -18,6 +18,7 @@ var EPOCH_2010_VN = Date.UTC(2010, 0, 1) - 7 * 3600 * 1000;   // GpsTime = giây
 
 /** Chạy 1 lần: kiểm tra cấu hình, đồng bộ thử, tạo lịch chạy mỗi phút. */
 function setup() {
+  Logger.log("Rules Firebase: " + ensureGpsRule());
   var res = syncGps();
   Logger.log("Đồng bộ thử: " + JSON.stringify(res, null, 1));
   ScriptApp.getProjectTriggers().forEach(function (t) {
@@ -78,17 +79,38 @@ function syncGps() {
     }
   });
 
-  var w = UrlFetchApp.fetch(dbUrl + "/gps.json", {
+  var w = UrlFetchApp.fetch(dbUrl + "/gps.json?access_token=" + ScriptApp.getOAuthToken(), {
     method: "patch",
     contentType: "application/json",
     payload: JSON.stringify(patch),
-    headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
     muteHttpExceptions: true
   });
   if (w.getResponseCode() !== 200) {
     throw new Error("Ghi Firebase lỗi HTTP " + w.getResponseCode() + ": " + w.getContentText().slice(0, 200));
   }
   return report;
+}
+
+/** Thêm khối "gps" (chỉ đọc) vào Rules của Firebase nếu chưa có.
+    Rules cũ được sao lưu vào Script Property RULES_BACKUP trước khi sửa. */
+function ensureGpsRule() {
+  var dbUrl = String(PropertiesService.getScriptProperties().getProperty("FIREBASE_DB_URL") || "").replace(/\/+$/, "");
+  if (!dbUrl) throw new Error("Thiếu Script Property FIREBASE_DB_URL");
+  var url = dbUrl + "/.settings/rules.json?access_token=" + ScriptApp.getOAuthToken();
+  var r = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  if (r.getResponseCode() !== 200) throw new Error("Đọc Rules lỗi HTTP " + r.getResponseCode() + ": " + r.getContentText().slice(0, 200));
+  var txt = r.getContentText(), rules;
+  try { rules = JSON.parse(txt); } catch (e) {
+    return "Rules có chú thích nên không tự sửa được, hãy thêm khối gps bằng tay (xem HUONG-DAN.md)";
+  }
+  if (!rules || !rules.rules) return "Rules không đúng dạng, hãy thêm khối gps bằng tay";
+  if (rules.rules.gps) return "đã có khối gps, giữ nguyên";
+  PropertiesService.getScriptProperties().setProperty("RULES_BACKUP", txt.slice(0, 9000));
+  rules.rules.gps = { ".read": "auth != null", ".write": false };
+  var w = UrlFetchApp.fetch(url, { method: "put", contentType: "application/json",
+    payload: JSON.stringify(rules, null, 2), muteHttpExceptions: true });
+  if (w.getResponseCode() !== 200) throw new Error("Ghi Rules lỗi HTTP " + w.getResponseCode() + ": " + w.getContentText().slice(0, 200));
+  return "đã thêm khối gps (rules cũ sao lưu ở Script Property RULES_BACKUP)";
 }
 
 /* ---------- tiện ích ---------- */

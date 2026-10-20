@@ -7,10 +7,11 @@ rồi ghi vào Firebase nhánh `gps/`. Dashboard đọc nhánh này và hiện 1
 > Link chia sẻ có chứa token: ai có link là xem được vị trí xe.
 > **Không dán link vào repo, config.js hay chat.** Chỉ dán vào Script Properties (bước 3).
 
-## 1. Thêm quyền đọc `gps` vào Firebase Rules
+## 1. Quyền đọc `gps` trong Firebase Rules
 
-Firebase Console → Realtime Database → Rules → thêm khối này vào trong `"rules": { ... }`
-(cạnh `vehicles`, `history`...), rồi **Publish**:
+Hàm `setup` (bước 4) **tự thêm** khối sau vào Rules đang chạy, sau khi sao lưu Rules cũ
+vào Script Property `RULES_BACKUP`. Chỉ khi log báo "không tự sửa được" mới cần thêm bằng tay
+(Firebase Console → Realtime Database → Rules → dán vào trong `"rules": { ... }` → Publish):
 
 ```json
 "gps": {
