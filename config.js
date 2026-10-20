@@ -39,14 +39,9 @@ window.APP_CONFIG = {
   // Màu biển số: "white" (nền trắng, chữ đen) | "blue" (nền xanh, chữ trắng)
   plateStyle: "white",
 
-  // --- Tài xế: tên + số điện thoại ---
-  drivers: [
-    { name: "Lê Nguyễn Hoàng Vũ",       phone: "(đã ẩn)" },
-    { name: "Nguyễn Lương Hoàng Chung", phone: "(đã ẩn)" },
-    { name: "Nguyễn Văn Nhu",           phone: "(đã ẩn)" },
-    { name: "Trương Công Khanh",        phone: "(đã ẩn)" },
-    { name: "Trần Minh Tân",            phone: "(đã ẩn)" }
-  ],
+  // --- Tài xế: KHÔNG ghi ở đây (repo công khai). ---
+  // Danh sách tên + số điện thoại lưu trên Firebase, sửa ở trang Nhật ký -> Cài đặt.
+  drivers: [],
 
   // Số phút mỗi lần bấm +/− trên trang tài xế
   extendStep: 10,
