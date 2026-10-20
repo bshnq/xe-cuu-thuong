@@ -131,7 +131,7 @@ function parseRefresh(j) {
   return {
     lat: y / 1e6,
     lng: x / 1e6,
-    speed: Math.round(col("Speed") || 0),
+    speed: Math.round((col("Speed") || 0) / 100),   // quanlyxe lưu km/h x 100
     heading: col("Heading") || 0,
     gpsTime: typeof gps === "number" ? EPOCH_2010_VN + gps * 1000 : 0,
     address: String(col("Location") || "").trim(),
