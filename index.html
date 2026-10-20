@@ -61,6 +61,7 @@ Store.onUser(function(u){
   });
 });
 
+var REFRESH='<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="currentColor" d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>';
 var fleet=document.getElementById("fleet"), cards={};
 function buildFleet(){
   fleet.innerHTML=""; cards={};
@@ -71,7 +72,8 @@ function buildFleet(){
        '<div class="veh-head"><div><div class="veh-name">'+esc(v.label)+'</div>'+UI.plateHTML(v.plate)+'</div>'
       +'<span class="pill" data-r="pill">-</span></div>'
       +'<div class="veh-main" data-r="main"></div>'
-      +'<a class="veh-gps" data-r="gps" target="_blank" rel="noopener" hidden></a>'
+      +'<div class="veh-gps" data-r="gps" hidden><a class="gps-link" target="_blank" rel="noopener"></a>'
+      +'<button class="gps-refresh" type="button" title="Cập nhật vị trí ngay" aria-label="Cập nhật vị trí">'+REFRESH+'</button></div>'
       +'<div class="veh-foot" data-r="foot"></div>';
     fleet.appendChild(el);
     cards[v.id]=el;
@@ -99,23 +101,43 @@ function ago(ms){
   var h=Math.floor(m/60); return h<24? h+" giờ" : Math.floor(h/24)+" ngày";
 }
 function renderGps(){
-  var H=CFG.hospital, staleMs=(CFG.gpsStaleMinutes||5)*60000, now=Date.now();
+  var H=CFG.hospital, now=Date.now();
+  var devMs=(CFG.gpsStaleMinutes||30)*60000, syncMs=(CFG.gpsSyncStaleMinutes||25)*60000;
   CFG.vehicles.forEach(function(v){
     var el=cards[v.id]; if(!el) return;
-    var a=q(el,"gps"), g=gps[v.id];
-    if(!g||!g.lat||!g.lng){ a.hidden=true; return; }
-    var age=now-(g.gpsTime||g.fetchedAt||0), stale=age>staleMs;
+    var row=q(el,"gps"), a=row.querySelector(".gps-link"), g=gps[v.id];
+    if(!g||!g.lat||!g.lng){ row.hidden=true; return; }
+    var gt=g.gpsTime||g.fetchedAt||0, age=now-gt;
+    // mất tín hiệu = thiết bị trên xe lâu không gửi, hoặc Apps Script lâu không cập nhật
+    var stale=((g.fetchedAt||now)-gt)>devMs || (now-(g.fetchedAt||0))>syncMs;
     var home=H && distM(H.lat,H.lng,g.lat,g.lng)<=(H.radius||150) && (g.speed||0)<5;
     var place=home?"Tại BV":(shortAddr(g.address)||(g.lat.toFixed(5)+", "+g.lng.toFixed(5)));
-    var meta=stale?"mất tín hiệu "+ago(age):((g.speed||0)>=5?g.speed+" km/h":ago(age));
+    var meta=stale?"mất tín hiệu "+ago(age)
+      :((g.speed||0)>=5?g.speed+" km/h"+(age>=60000?" · "+ago(age):""):ago(age));
     a.href="https://www.google.com/maps?q="+g.lat+","+g.lng;
     a.title=(g.address||"")+(g.gpsTime?" · GPS "+UI.hm(g.gpsTime):"");
-    a.className="veh-gps"+(stale?" stale":"")+(home?" home":"");
+    row.className="veh-gps"+(stale?" stale":"")+(home?" home":"")+(refreshing?" spin":"");
     a.innerHTML=PIN+'<span class="gps-place">'+esc(place)+'</span><span class="gps-meta">'+esc(meta)+'</span>';
-    a.hidden=false;
+    row.hidden=false;
   });
 }
 setInterval(renderGps,15000);
+
+/* Nút ↻: cập nhật vị trí cả đội xe ngay */
+var refreshing=false;
+fleet.addEventListener("click",function(ev){
+  var b=ev.target.closest&&ev.target.closest(".gps-refresh"); if(!b||refreshing) return;
+  refreshing=true; renderGps();
+  var before=JSON.stringify(gps), t0=Date.now();
+  function done(msg){ refreshing=false; renderGps(); if(msg) UI.toast(msg); }
+  Store.refreshGps().then(function(j){
+    if(j && j.skipped){ done("Vị trí "+j.skipped); return; }
+    // chờ Firebase đẩy dữ liệu mới về (tối đa 8 giây)
+    (function wait(){ if(JSON.stringify(gps)!==before || Date.now()-t0>8000) done(); else setTimeout(wait,300); })();
+  }).catch(function(e){
+    done(/denied/.test(e&&e.message)?"Tài khoản này không có quyền cập nhật":"Chưa cập nhật được, thử lại sau");
+  });
+});
 Store.subscribeGps(function(map){ gps=map; renderGps(); });
 
 function q(el,r){ return el.querySelector('[data-r='+r+']'); }

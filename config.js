@@ -34,8 +34,14 @@ window.APP_CONFIG = {
   // --- GPS (đồng bộ từ quanlyxe.vn qua Apps Script, xem apps-script/HUONG-DAN.md) ---
   // Xe nằm trong bán kính này quanh bệnh viện thì hiện "Tại BV" thay cho địa chỉ.
   hospital: { lat: 10.76070, lng: 106.64815, radius: 150 },
-  // Quá số phút này không có vị trí mới thì báo "mất tín hiệu".
-  gpsStaleMinutes: 5,
+  // Vị trí lấy từ quanlyxe.vn mỗi 10 phút (Apps Script). Báo "mất tín hiệu" khi:
+  //  - thiết bị trên xe không gửi vị trí mới quá gpsStaleMinutes phút, hoặc
+  //  - Apps Script không cập nhật quá gpsSyncStaleMinutes phút.
+  gpsStaleMinutes: 30,
+  gpsSyncStaleMinutes: 25,
+  // Nút ↻ trên dashboard: URL Web App của Apps Script GPS (xem apps-script/HUONG-DAN.md).
+  // Không phải bí mật: Web App chỉ chạy cho tài khoản được duyệt, tối đa 1 lần / 10 giây.
+  gpsRefreshUrl: "https://script.google.com/macros/s/AKfycbwm320m3Lwk-6HRv7sD4ErlV5Y6clvk5DsnL63mT8Jyg6AJ5ACjGppYViAVVY_5Wz9Q/exec",
 
   // Màu biển số: "white" (nền trắng, chữ đen) | "blue" (nền xanh, chữ trắng)
   plateStyle: "white",

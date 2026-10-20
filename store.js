@@ -431,6 +431,18 @@
         function (err) { console.error("Đọc GPS lỗi:", err && err.message); cb({}); });
     });
   };
+  /* Nút ↻: nhờ Apps Script lấy vị trí ngay (gửi ID token để Web App kiểm tra quyền) */
+  FirebaseStore.prototype.refreshGps = function () {
+    var url = CFG.gpsRefreshUrl, user = this.user;
+    if (!url) return Promise.reject(new Error("Chưa cấu hình gpsRefreshUrl"));
+    if (!user) return Promise.reject(new Error("Chưa đăng nhập"));
+    return user.getIdToken().then(function (t) {
+      return fetch(url, { method: "POST", body: t });       // text/plain: không cần preflight CORS
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) throw new Error(j.error || "Không cập nhật được");
+      return j;
+    });
+  };
   FirebaseStore.prototype._mutate = function (id, action, args) {
     var self = this;
     return this.ready.then(function (user) {
@@ -626,6 +638,9 @@
         : { lat: h.lat, lng: h.lng, speed: 0, gpsTime: t - 30000, fetchedAt: t, address: "" };
     });
     cb(demo);
+  };
+  DemoStore.prototype.refreshGps = function () {
+    return new Promise(function (r) { setTimeout(function () { r({ ok: true }); }, 800); });
   };
   DemoStore.prototype._mutate = function (id, action, args) {
     var raw = this._readRaw(), prev = Object.assign(blankVehicle(), raw[id] || {});

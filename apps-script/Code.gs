@@ -11,12 +11,16 @@
    (tên sau GPS_LINK_ phải trùng id xe trong config.js / trang Nhật ký)
 
    Cài đặt: chạy hàm setup() một lần, cấp quyền khi Google hỏi.
+   Lịch: tự chạy mỗi 10 phút (tiết kiệm hạn mức 90 phút/ngày của tài khoản Gmail).
+   Nút ↻ trên dashboard gọi Web App (doPost) để cập nhật ngay; xem HUONG-DAN.md.
    ========================================================================= */
 
 var QLX = "https://quanlyxe.vn";
 var EPOCH_2010_VN = Date.UTC(2010, 0, 1) - 7 * 3600 * 1000;   // GpsTime = giây từ 01/01/2010 giờ VN
+var EVERY_MINUTES = 10;          // lịch tự chạy (Apps Script chỉ cho 1, 5, 10, 15, 30)
+var REFRESH_GAP_SEC = 10;        // nút ↻: tối đa 1 lần / 10 giây cho mọi người cộng lại
 
-/** Chạy 1 lần: kiểm tra cấu hình, đồng bộ thử, tạo lịch chạy mỗi phút. */
+/** Chạy 1 lần: kiểm tra cấu hình, đồng bộ thử, tạo lịch chạy mỗi 10 phút. */
 function setup() {
   Logger.log("Rules Firebase: " + ensureGpsRule());
   var res = syncGps();
@@ -24,8 +28,8 @@ function setup() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === "syncGps") ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger("syncGps").timeBased().everyMinutes(1).create();
-  Logger.log("Đã tạo lịch chạy mỗi 1 phút.");
+  ScriptApp.newTrigger("syncGps").timeBased().everyMinutes(EVERY_MINUTES).create();
+  Logger.log("Đã tạo lịch chạy mỗi " + EVERY_MINUTES + " phút.");
 }
 
 /** Gỡ lịch chạy (khi muốn tạm dừng). */
@@ -111,6 +115,30 @@ function ensureGpsRule() {
     payload: JSON.stringify(rules, null, 2), muteHttpExceptions: true });
   if (w.getResponseCode() !== 200) throw new Error("Ghi Rules lỗi HTTP " + w.getResponseCode() + ": " + w.getContentText().slice(0, 200));
   return "đã thêm khối gps (rules cũ sao lưu ở Script Property RULES_BACKUP)";
+}
+
+/** Web App cho nút ↻ trên dashboard.
+    Trình duyệt gửi Firebase ID token (POST, text/plain). Chỉ chạy khi token thuộc
+    tài khoản được xem GPS (Rules của nhánh gps quyết định), và tối đa 1 lần / 10 giây. */
+function doPost(e) {
+  var token = String((e && e.postData && e.postData.contents) || "").trim();
+  if (token.length < 100 || token.length > 4000) return json_({ ok: false, error: "no-token" });
+
+  var cache = CacheService.getScriptCache();
+  if (cache.get("refreshGap")) return json_({ ok: true, skipped: "vừa cập nhật" });
+  cache.put("refreshGap", "1", REFRESH_GAP_SEC);
+
+  var dbUrl = String(PropertiesService.getScriptProperties().getProperty("FIREBASE_DB_URL") || "").replace(/\/+$/, "");
+  var check = UrlFetchApp.fetch(dbUrl + "/gps.json?shallow=true&auth=" + encodeURIComponent(token), { muteHttpExceptions: true });
+  if (check.getResponseCode() !== 200) return json_({ ok: false, error: "denied" });
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) return json_({ ok: true, skipped: "đang cập nhật" });
+  try { syncGps(); } finally { lock.releaseLock(); }
+  return json_({ ok: true });
+}
+function json_(o) {
+  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
 }
 
 /* ---------- tiện ích ---------- */

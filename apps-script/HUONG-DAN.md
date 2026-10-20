@@ -53,14 +53,26 @@ Console in ra 3 cặp tên + link. Trong Apps Script → Project Settings → **
 ## 4. Chạy
 
 Trong trình soạn thảo chọn hàm **`setup`** → **Run** → cấp quyền khi Google hỏi.
-Execution log hiện vị trí 3 xe là xong; từ đó script tự chạy mỗi phút. Mở dashboard để xem.
+Execution log hiện vị trí 3 xe là xong; từ đó script tự chạy **mỗi 10 phút**. Mở dashboard để xem.
+
+## 5. Nút ↻ cập nhật ngay (Web App)
+
+Deploy → **New deployment** → loại **Web app** → Execute as: **Me** → Who has access: **Anyone** → Deploy.
+Chép URL `.../exec` vào `gpsRefreshUrl` trong `config.js`.
+
+- "Anyone" là bắt buộc (trình duyệt không gửi được phiên Google sang script.google.com).
+  Script tự kiểm tra: chỉ chạy khi người bấm có quyền xem GPS (token Firebase), tối đa 1 lần / 10 giây.
+- Sửa code Apps Script xong, Web App **không tự cập nhật**: Deploy → Manage deployments →
+  bút chì → Version: **New version** → Deploy (URL giữ nguyên).
 
 - Tạm dừng: chạy hàm `stop`.
 - Xem lỗi: menu **Executions** trong Apps Script.
 
 ## Ghi chú
 
-- Vị trí cập nhật **mỗi 1 phút** (giới hạn lịch chạy miễn phí của Apps Script).
+- Vị trí tự cập nhật **mỗi 10 phút** để tiết kiệm hạn mức 90 phút/ngày của tài khoản Gmail
+  (dùng chung với các script khác như KCB). Mỗi lần chạy khoảng 2-3 giây, tức khoảng 6 phút/ngày.
 - Xe trong bán kính 150 m quanh bệnh viện và đứng yên thì hiện "Tại BV" (chỉnh `hospital` trong `config.js`).
-- Quá 5 phút không có vị trí mới thì dòng vị trí mờ đi và báo "mất tín hiệu" (chỉnh `gpsStaleMinutes`).
+- Dòng vị trí mờ đi và báo "mất tín hiệu" khi thiết bị trên xe quá 30 phút không gửi vị trí
+  (`gpsStaleMinutes`) hoặc Apps Script quá 25 phút không cập nhật (`gpsSyncStaleMinutes`).
 - Cách này dùng API nội bộ của quanlyxe.vn: nếu Vietmap đổi giao diện hoặc thu hồi link chia sẻ thì cần sửa lại. Về lâu dài nên xin Vietmap API chính thức.
