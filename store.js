@@ -17,6 +17,8 @@
    Đăng nhập / phân quyền (trang log.html dùng Google):
      Store.onUser(cb), Store.signInGoogle(), Store.signOut(), Store.isOwner()
      Store.subscribeViewers(cb), Store.addViewer(email), Store.removeViewer(email)
+   Thùng rác nhật ký (chỉ ẩn khỏi giao diện, dữ liệu trên Firebase không bị xóa):
+     Store.subscribeTrash(cb), Store.trashLogs(fromMs, toMs, count), Store.restoreTrash(id)
 
    Trạng thái mỗi xe:
      { status:"available"|"busy", departAt, etaMinutes, returnAt, destination,
@@ -382,6 +384,30 @@
     return function () { cancelled = true; if (q && handler) q.off("value", handler); };
   };
 
+
+  /* ----- thùng rác nhật ký: chỉ ẨN trên giao diện, dữ liệu gốc vẫn còn ----- */
+  FirebaseStore.prototype.subscribeTrash = function (cb) {
+    var self = this, r = null;
+    this.ready.then(function () {
+      r = self.db.ref("logView/trash");
+      r.on("value", function (snap) {
+        var arr = []; snap.forEach(function (c) { var v = c.val(); v.id = c.key; arr.push(v); });
+        cb(arr.sort(function (a, b) { return b.at - a.at; }));
+      }, function () { cb([]); });
+    });
+    return function () { if (r) r.off(); };
+  };
+  FirebaseStore.prototype.trashLogs = function (fromMs, toMs, count) {
+    var self = this;
+    return this.ready.then(function (user) {
+      return self.db.ref("logView/trash").push({ from: fromMs, to: toMs, count: count || 0,
+        at: firebase.database.ServerValue.TIMESTAMP, by: user.email || "" });
+    });
+  };
+  FirebaseStore.prototype.restoreTrash = function (id) {
+    return this.db.ref("logView/trash/" + id).remove();
+  };
+
   /* ---------------------- Backend Demo (localStorage) ----------------------
      Dùng để xem thử khi chưa gắn Firebase. Nhiều tab cùng trình duyệt sẽ
      đồng bộ qua sự kiện 'storage'. Ở demo luôn coi như đã đăng nhập chủ project. */
@@ -493,6 +519,34 @@
     this.logCbs.push(s);
     cb(this._logs().filter(function (e) { return e.ts >= fromMs && e.ts <= toMs; }));
     return function () { self.logCbs = self.logCbs.filter(function (x) { return x !== s; }); };
+  };
+
+
+  var TRASHKEY = "ambulance_demo_trash_v1";
+  DemoStore.prototype._trash = function () {
+    try { return JSON.parse(localStorage.getItem(TRASHKEY) || "{}"); } catch (e) { return {}; }
+  };
+  DemoStore.prototype._emitTrash = function () {
+    var t = this._trash(), arr = Object.keys(t).map(function (k) { var v = t[k]; v.id = k; return v; });
+    arr.sort(function (a, b) { return b.at - a.at; });
+    (this.trashCbs || []).forEach(function (cb) { cb(arr); });
+  };
+  DemoStore.prototype.subscribeTrash = function (cb) {
+    var self = this; this.trashCbs = (this.trashCbs || []).concat([cb]); this._emitTrash();
+    if (!this._trashListen) { this._trashListen = true;
+      window.addEventListener("storage", function (e) { if (e.key === TRASHKEY) self._emitTrash(); }); }
+    return function () {};
+  };
+  DemoStore.prototype.trashLogs = function (fromMs, toMs, count) {
+    var t = this._trash();
+    t[newId()] = { from: fromMs, to: toMs, count: count || 0, at: nowMs(), by: this.user.email };
+    localStorage.setItem(TRASHKEY, JSON.stringify(t)); this._emitTrash();
+    return Promise.resolve();
+  };
+  DemoStore.prototype.restoreTrash = function (id) {
+    var t = this._trash(); delete t[id];
+    localStorage.setItem(TRASHKEY, JSON.stringify(t)); this._emitTrash();
+    return Promise.resolve();
   };
 
   /* ---------------------- API chung ---------------------- */

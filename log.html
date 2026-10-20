@@ -89,6 +89,13 @@
   .x:hover{background:var(--late-soft);color:var(--late)}
   .add{border:1.5px dashed var(--line);background:transparent;border-radius:12px;padding:11px;width:100%;font-weight:600;font-size:14px;cursor:pointer;color:var(--muted);font-family:inherit}
   .add:hover{border-color:var(--ink);color:var(--ink)}
+  .btn.sm.ghost{background:var(--field);color:var(--ink)}
+  .btn.sm.ghost:hover{background:var(--late-soft);color:var(--late)}
+  .tb{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}
+  .tb:last-child{border-bottom:none}
+  .tb b{font-size:16px;font-variant-numeric:tabular-nums}
+  .tb small{display:block;color:var(--muted);font-weight:500;margin-top:3px;font-size:13px}
+  .tb button{border:none;background:var(--ink);color:#fff;border-radius:12px;padding:10px 16px;font-weight:600;cursor:pointer;font-family:inherit;flex:none}
   .savebar{position:sticky;bottom:12px;display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
   .savebar .btn{width:auto;padding:14px 22px;font-size:15px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
   .savebar .btn.ghost{background:var(--surface);color:var(--ink)}
@@ -112,7 +119,12 @@
 
   <div class="tabs" id="tabs" hidden>
     <button class="on" data-tab="log">Nhật ký</button>
+    <button data-tab="trash">Thùng rác</button>
     <button data-tab="set">Cài đặt</button>
+  </div>
+
+  <div id="viewTrash" hidden>
+    <div class="card" id="trashList"></div>
   </div>
 
   <div id="viewSet" hidden>
@@ -176,6 +188,7 @@
       <button class="dchip" data-range="30">30 ngày</button>
       <label class="chk"><input type="checkbox" id="fHideOpen"> Ẩn lượt mở trang</label>
       <span class="spacer"></span>
+      <button class="btn sm ghost" id="btnTrash" hidden>Xóa khỏi màn hình</button>
       <button class="btn sm" id="btnCsv">Xuất Excel</button>
     </div>
   </div>
@@ -262,6 +275,7 @@ $("fQ").addEventListener("input",render);
 function filtered(){
   var v=$("fVeh").value, d=$("fDrv").value, a=$("fAct").value, q=$("fQ").value.trim().toLowerCase(), hide=$("fHideOpen").checked;
   return logs.filter(function(e){
+    if(isTrashed(e)) return false;
     if(v && e.vehicle!==v) return false;
     if(d && e.driver!==d && e.prevDriver!==d) return false;
     if(a && e.action!==a) return false;
@@ -363,7 +377,7 @@ $("btnCsv").onclick=function(){
 /* ===================== Đăng nhập + phân quyền ===================== */
 var started=false, appShown=false;
 var GICON='<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
-function gate(html){ $("gate").innerHTML=html; $("gate").hidden=false; $("viewLog").hidden=true; $("viewSet").hidden=true; $("tabs").hidden=true; }
+function gate(html){ $("gate").innerHTML=html; $("gate").hidden=false; $("viewLog").hidden=true; $("viewSet").hidden=true; $("viewTrash").hidden=true; $("tabs").hidden=true; }
 function loginGate(){
   gate('<h2>Nhật ký xe</h2><p>Đăng nhập để xem</p><button class="gbtn" id="btnLogin">'+GICON+'Đăng nhập Google</button>');
   $("btnLogin").onclick=function(){ Store.signInGoogle(); };
@@ -377,11 +391,12 @@ function showApp(){
   if(appShown) return; appShown=true;
   $("gate").hidden=true;
   $("tabs").hidden=!Store.isOwner();
+  $("btnTrash").hidden=!Store.isOwner();
   switchTab("log");
 }
 function switchTab(t){
   Array.prototype.forEach.call($("tabs").children,function(b){ b.classList.toggle("on",b.getAttribute("data-tab")===t); });
-  $("viewLog").hidden=t!=="log"; $("viewSet").hidden=t!=="set";
+  $("viewLog").hidden=t!=="log"; $("viewSet").hidden=t!=="set"; $("viewTrash").hidden=t!=="trash";
 }
 Array.prototype.forEach.call($("tabs").children,function(b){ b.onclick=function(){ switchTab(b.getAttribute("data-tab")); }; });
 
@@ -490,6 +505,39 @@ function startAdmin(){
   Store.subscribeAll(function(map){ lastVeh=map; });
 }
 
+/* ===================== Thùng rác: ẩn khỏi giao diện, dữ liệu gốc vẫn còn ===================== */
+var trash=[], trashStarted=false;
+function isTrashed(e){
+  for(var i=0;i<trash.length;i++){ if(e.ts>=trash[i].from && e.ts<=trash[i].to) return true; }
+  return false;
+}
+function startTrash(){
+  if(trashStarted) return; trashStarted=true;
+  Store.subscribeTrash(function(list){ trash=list||[]; render(); drawTrash(); });
+}
+function drawTrash(){
+  if(!trash.length){ $("trashList").innerHTML='<div class="empty">Thùng rác trống</div>'; return; }
+  $("trashList").innerHTML=trash.map(function(t){
+    return '<div class="tb"><div><b>'+UI.dmy(t.from)+' → '+UI.dmy(t.to)+'</b>'
+      +'<small>'+(t.count||0)+' mục · xóa lúc '+UI.hm(t.at)+' '+UI.dmy(t.at)+(t.by?' · '+esc(t.by):'')+'</small></div>'
+      +'<button data-restore="'+esc(t.id)+'">Khôi phục</button></div>';
+  }).join("");
+  Array.prototype.forEach.call($("trashList").querySelectorAll("[data-restore]"),function(b){
+    b.onclick=function(){
+      b.disabled=true;
+      Store.restoreTrash(b.getAttribute("data-restore")).then(function(){ UI.toast("Đã khôi phục"); });
+    };
+  });
+}
+$("btnTrash").onclick=function(){
+  var f=$("fFrom").value, t=$("fTo").value;
+  var from=new Date(f+"T00:00:00").getTime(), to=Math.min(new Date(t+"T23:59:59.999").getTime(), Date.now());
+  var n=logs.filter(function(e){ return !isTrashed(e) && e.ts>=from && e.ts<=to; }).length;
+  if(!n){ UI.toast("Không có gì để xóa"); return; }
+  if(!confirm("Xóa "+n+" mục từ "+UI.dmy(from)+" đến "+UI.dmy(to)+" khỏi màn hình?\nDữ liệu gốc vẫn được giữ, khôi phục được trong Thùng rác.")) return;
+  Store.trashLogs(from,to,n).then(function(){ UI.toast("Đã chuyển vào Thùng rác"); });
+};
+
 /* khởi động (đặt cuối để mọi biến đã sẵn sàng) */
 Store.onUser(function(u){
   if(!u){
@@ -499,7 +547,7 @@ Store.onUser(function(u){
   }
   $("who").innerHTML=(window.STORE_MODE==="demo"?"":'<span>'+esc(u.email||"")+'</span><button id="btnSignOut">Đăng xuất</button>');
   if($("btnSignOut")) $("btnSignOut").onclick=function(){ Store.signOut(); };
-  if(!started){ started=true; setRange(7); }
+  if(!started){ started=true; setRange(7); startTrash(); }
   if(Store.isOwner()) startAdmin();
 });
 Store.onSettings(function(){ fillVehFilter(); fillDriverFilter(); if(!dirty) resetDraft(); });
