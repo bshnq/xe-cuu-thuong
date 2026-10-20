@@ -24,7 +24,7 @@ Trình duyệt chỉ được đọc; Apps Script ghi bằng quyền chủ proje
 
 ## 2. Tạo Apps Script
 
-1. Đăng nhập Google bằng **tài khoản chủ project Firebase** ((email đã ẩn)), mở https://script.google.com → **Dự án mới**, đặt tên "GPS xe cứu thương".
+1. Đăng nhập Google bằng **tài khoản chủ project Firebase** (tài khoản chủ project trên Firebase), mở https://script.google.com → **Dự án mới**, đặt tên "GPS xe cứu thương".
 2. Dán nội dung `Code.gs` vào file Code.gs.
 3. Project Settings (bánh răng) → bật **Show "appsscript.json" manifest file in editor** → mở `appsscript.json`, dán nội dung file `appsscript.json` trong thư mục này.
 

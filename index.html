@@ -15,10 +15,12 @@
   <div class="appbar">
     <h1>Công xa</h1>
     <span class="clock" id="clock">-</span>
-    <a class="navlink" href="log.html">Nhật ký</a>
+    <a class="navlink" href="log.html" id="navLog" hidden>Nhật ký</a>
+    <button class="navlink" id="btnOut" hidden>Thoát</button>
   </div>
 
-  <div class="fleet" id="fleet"></div>
+  <div class="card gate" id="gate" hidden></div>
+  <div class="fleet" id="fleet" hidden></div>
 
   <div class="foot" id="foot"></div>
 </div>
@@ -26,12 +28,38 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script>window.APP_AUTH="google";</script>
 <script src="config.js"></script>
 <script src="store.js"></script>
 <script src="ui.js"></script>
 <script>
 var CFG=window.APP_CONFIG, esc=UI.esc;
 document.getElementById("foot").textContent=CFG.unit;
+
+/* ----- đăng nhập: chỉ tài khoản Google được duyệt mới xem được ----- */
+var gateEl=document.getElementById("gate"), fleetEl=document.getElementById("fleet");
+var btnOut=document.getElementById("btnOut"), navLog=document.getElementById("navLog");
+btnOut.onclick=function(){ Store.signOut(); };
+function showGate(html){ gateEl.innerHTML=html; gateEl.hidden=false; fleetEl.hidden=true; navLog.hidden=true; }
+var seenUid;
+Store.onUser(function(u){
+  var uid=u?u.uid:null;
+  if(seenUid && uid && uid!==seenUid){ location.reload(); return; }   // đổi tài khoản: tải lại để đọc theo quyền mới
+  if(uid) seenUid=uid;
+  btnOut.hidden=!u;
+  if(!u){
+    showGate('<h2>Công xa</h2><p>Đăng nhập để xem tình trạng xe</p><button class="btn" id="btnLogin">Đăng nhập Google</button>');
+    document.getElementById("btnLogin").onclick=function(){ Store.signInGoogle(); };
+    return;
+  }
+  Store.checkAccess().then(function(ok){
+    if(!ok){
+      showGate('<h2>Chưa có quyền xem</h2><p>'+esc(u.email||"")+'</p><p>Nhờ khoa Cấp cứu thêm email này vào danh sách được xem.</p>');
+      return;
+    }
+    gateEl.hidden=true; fleetEl.hidden=false; navLog.hidden=false;
+  });
+});
 
 var fleet=document.getElementById("fleet"), cards={};
 function buildFleet(){

@@ -16,6 +16,10 @@
   .qr-inst{font-size:15px;color:var(--ink);margin-top:12px;line-height:1.5}
   .url{font-size:11px;color:var(--muted);word-break:break-all;margin-top:8px}
   .noprint{margin:0 4px 14px}
+  .qr-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .btn.ghost{background:var(--field);color:var(--ink)}
+  .btn.warn{background:var(--late)}
+  #gate{text-align:center}
   @media print{
     .noprint{display:none} body{background:#fff;padding:0}
     .card{box-shadow:none;border:1px dashed #bbb;margin:0 0 8mm}
@@ -29,8 +33,23 @@
     <h1>MÃ QR DÁN LÊN XE</h1>
   </div>
 
-  <div class="noprint" style="margin-bottom:12px">
-    <button class="btn" onclick="window.print()">In</button>
+  <div class="card noprint" id="gate" hidden></div>
+
+  <div class="noprint" id="ctl" hidden>
+    <div class="card">
+      <div class="lbl">Mã QR có khóa bí mật</div>
+      <p class="qr-inst" style="margin:0 0 12px">Chỉ ai quét đúng mã QR này mới bấm được nút trên trang tài xế.
+        Nếu mã bị chụp lại hoặc lộ ra ngoài, bấm <b>Đổi mã</b> rồi in và dán lại.</p>
+      <div class="qr-actions">
+        <button class="btn" onclick="window.print()">In</button>
+        <button class="btn ghost" id="btnRotate">Đổi mã tất cả xe</button>
+      </div>
+    </div>
+    <div class="card" id="legacyBox">
+      <div class="lbl">Mã QR cũ (không có khóa)</div>
+      <p class="qr-inst" id="legacyTxt" style="margin:0 0 12px"></p>
+      <button class="btn ghost" id="btnLegacy"></button>
+    </div>
   </div>
 
   <div id="cards"></div>
@@ -41,38 +60,74 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script>window.APP_AUTH="google";</script>
 <script src="config.js"></script>
 <script src="store.js"></script>
 <script src="ui.js"></script>
 <script>
-var CFG=window.APP_CONFIG;
-document.getElementById("foot").textContent=CFG.unit;
+var CFG=window.APP_CONFIG, $=function(id){return document.getElementById(id);};
+$("foot").textContent=CFG.unit;
 
-/* URL gốc = thư mục hiện tại (bỏ 'qr.html') -> ghép xe.html?id= */
-var base=location.href.replace(/qr\.html.*$/,"").replace(/[^\/]*$/,"");
-if(!/\/$/.test(base)) base+="/";
+/* URL gốc = thư mục hiện tại (bỏ 'qr.html') -> ghép xe.html?id=&k= */
+var base=location.href.replace(/[?#].*$/,"").replace(/[^\/]*$/,"");
 
-var wrap=document.getElementById("cards");
-Store.onSettings(function(){ wrap.innerHTML=""; CFG.vehicles.forEach(function(v){
-  var url=base+"xe.html?id="+encodeURIComponent(v.id);
-  var card=document.createElement("div");
-  card.className="card qr-card";
-  card.innerHTML=
-    '<div class="qr-box"><div class="qrimg"></div></div>'
-    +'<div class="qr-name">'+v.label+'</div>'
-    +(v.plate?'<div class="qr-sub">'+UI.plateHTML(v.plate,"lg")+'</div>':'')
-    +'<div class="url">'+url+'</div>';
-  wrap.appendChild(card);
-  new QRCode(card.querySelector(".qrimg"),{text:url,width:240,height:240,correctLevel:QRCode.CorrectLevel.M});
-}); });
-
-if(location.protocol==="file:"){
-  var note=document.createElement("div");
-  note.className="card noprint";
-  note.innerHTML='<b>Lưu ý:</b> Bạn đang mở file cục bộ. Mã QR chỉ đúng khi đã đưa web lên '
-    +'GitHub Pages, hãy mở lại <code>qr.html</code> từ địa chỉ đó rồi in.';
-  document.getElementById("cards").before(note);
+var wrap=$("cards"), keys=null, legacy=null, started=false;
+function draw(){
+  if(!keys) return;
+  wrap.innerHTML="";
+  CFG.vehicles.forEach(function(v){
+    if(!keys[v.id]) return;
+    var url=base+"xe.html?id="+encodeURIComponent(v.id)+"&k="+encodeURIComponent(keys[v.id]);
+    var card=document.createElement("div");
+    card.className="card qr-card";
+    card.innerHTML=
+      '<div class="qr-box"><div class="qrimg"></div></div>'
+      +'<div class="qr-name">'+UI.esc(v.label)+'</div>'
+      +(v.plate?'<div class="qr-sub">'+UI.plateHTML(v.plate,"lg")+'</div>':'')
+      +'<div class="qr-inst">Tài xế quét mã này để báo xe đi / về</div>';
+    wrap.appendChild(card);
+    new QRCode(card.querySelector(".qrimg"),{text:url,width:240,height:240,correctLevel:QRCode.CorrectLevel.M});
+  });
+  $("legacyTxt").textContent=legacy
+    ?"Đang CHO PHÉP: mã QR cũ dán trên xe vẫn dùng được. Sau khi dán mã mới lên tất cả xe, hãy tắt."
+    :"Đã TẮT: chỉ mã QR có khóa mới dùng được.";
+  $("btnLegacy").textContent=legacy?"Tắt mã QR cũ":"Bật lại mã QR cũ";
+  $("btnLegacy").className="btn "+(legacy?"warn":"ghost");
 }
+function gate(html){ $("gate").innerHTML=html; $("gate").hidden=false; $("ctl").hidden=true; wrap.innerHTML=""; }
+
+Store.onUser(function(u){
+  if(!u){
+    gate('<b>Đăng nhập để in mã QR</b><p></p><button class="btn" id="btnLogin">Đăng nhập Google</button>');
+    $("btnLogin").onclick=function(){ Store.signInGoogle(); };
+    return;
+  }
+  if(!Store.isOwner()){
+    gate('<b>Chỉ chủ project được in mã QR</b><p>'+UI.esc(u.email||"")+'</p><button class="btn ghost" id="btnOut">Đổi tài khoản</button>');
+    $("btnOut").onclick=function(){ Store.signOut(); };
+    return;
+  }
+  $("gate").hidden=true; $("ctl").hidden=false;
+  if(started) return; started=true;
+  Store.subscribeQr(function(k,l,err){
+    if(err){ gate('<b>Không đọc được mã QR</b><p>'+UI.esc(err.message||"")+'</p>'); return; }
+    keys=k; legacy=l;
+    Store.settingsReady.then(function(){
+      var ids=CFG.vehicles.map(function(v){return v.id;});
+      if(ids.some(function(id){return !keys[id];})) Store.ensureQrKeys(ids,keys);
+      draw();
+    });
+  });
+  Store.onSettings(draw);
+});
+$("btnRotate").onclick=function(){
+  if(!confirm("Đổi mã QR cho TẤT CẢ xe?\nMã đang dán trên xe sẽ hết hiệu lực ngay, phải in và dán lại.")) return;
+  Store.rotateQrKeys(CFG.vehicles.map(function(v){return v.id;})).then(function(){ UI.toast("Đã đổi mã, hãy in lại"); });
+};
+$("btnLegacy").onclick=function(){
+  if(legacy && !confirm("Tắt mã QR cũ?\nChỉ làm khi đã dán mã QR mới lên tất cả xe.")) return;
+  Store.setLegacyQr(!legacy);
+};
 </script>
 </body>
 </html>

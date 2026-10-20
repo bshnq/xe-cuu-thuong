@@ -178,3 +178,9 @@ input.text::placeholder{color:var(--muted)}
 .gps-meta{flex:none;font-size:13px;opacity:.85;font-variant-numeric:tabular-nums}
 .veh-gps.stale{opacity:.6}
 .veh-gps.stale .gps-meta{opacity:1}
+
+/* Màn hình đăng nhập (dashboard) */
+.gate{max-width:420px;margin:40px auto;text-align:center;padding:30px 22px}
+.gate h2{margin:0 0 8px;font-size:22px}
+.gate p{color:var(--muted);margin:0 0 16px;font-size:15px}
+button.navlink{cursor:pointer;font-family:inherit}

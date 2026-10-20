@@ -67,6 +67,18 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="config.js"></script>
+<script>
+/* Khóa QR: lấy từ ?k= (mã QR mới), nhớ trên máy để lần sau mở lại không cần quét;
+   xóa khỏi thanh địa chỉ để không vô tình chia sẻ link kèm khóa. */
+(function(){
+  var p=new URLSearchParams(location.search), vid=p.get("id")||"xe1", k=p.get("k")||"";
+  try{
+    if(k) localStorage.setItem("qrk_"+vid,k); else k=localStorage.getItem("qrk_"+vid)||"";
+  }catch(e){}
+  if(p.has("k")){ p.delete("k"); history.replaceState(null,"",location.pathname+"?"+p.toString()); }
+  window.APP_DRIVER={vid:vid,k:k};
+})();
+</script>
 <script src="store.js"></script>
 <script src="ui.js"></script>
 <script>
@@ -179,6 +191,11 @@ function tick(){
   $("btnMinus").disabled=late;
 }
 Store.onSettings(function(){
+  if(Store.settingsDenied){
+    document.querySelector(".wrap").innerHTML='<div class="card"><b>Mã QR không còn hiệu lực</b>'
+      +'<p style="color:var(--muted);margin:8px 0 0">Hãy quét lại mã QR dán trên xe. Nếu vẫn lỗi, báo khoa Cấp cứu.</p></div>';
+    return;
+  }
   vehCfg=CFG.vehicles.filter(function(v){return v.id===vehId;})[0];
   if(!vehCfg){
     document.querySelector(".wrap").innerHTML='<div class="card"><b>Không tìm thấy xe</b></div>';

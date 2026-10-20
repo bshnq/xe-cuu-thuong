@@ -16,7 +16,9 @@
      Store.onSettings(cb)                      -> cb() khi cài đặt tải xong / thay đổi
      Store.saveSettings({vehicles, drivers, destinations})
    Đăng nhập / phân quyền (trang log.html dùng Google):
-     Store.onUser(cb), Store.signInGoogle(), Store.signOut(), Store.isOwner()
+     Store.onUser(cb), Store.signInGoogle(), Store.signOut(), Store.isOwner(), Store.checkAccess()
+     Quyền: Store.subscribeAccess("viewers"|"dash", cb), Store.addAccess(list, email), Store.removeAccess(list, email)
+     Khóa QR: Store.subscribeQr(cb(keys, legacy)), Store.ensureQrKeys(ids, keys), Store.rotateQrKeys(ids), Store.setLegacyQr(on)
      Store.subscribeViewers(cb), Store.addViewer(email), Store.removeViewer(email)
    Thùng rác nhật ký (chỉ ẩn khỏi giao diện, dữ liệu trên Firebase không bị xóa):
      Store.subscribeTrash(cb), Store.trashLogs(fromMs, toMs, count), Store.restoreTrash(id)
@@ -222,10 +224,13 @@
   }
 
   /* ---------------------- Backend Firebase ----------------------
-     Trang thường (tài xế, dashboard, QR): đăng nhập ẩn danh, tài xế không thấy gì.
-     Trang log.html (window.APP_AUTH = "google"): phải đăng nhập Google.
+     Trang tài xế (xe.html): đăng nhập ẩn danh + khóa QR (window.APP_DRIVER = {vid, k}).
+       Điện thoại ghi khóa vào driverSessions/<uid>/<vid>; Rules chỉ nhận khi khóa đúng
+       với qrKeys/<vid>, và chỉ cho ghi xe/nhật ký khi phiên còn hợp lệ.
+     Dashboard, Nhật ký, QR (window.APP_AUTH = "google"): phải đăng nhập Google.
      Mỗi thao tác xe dùng transaction để 2 điện thoại bấm cùng lúc không đè nhau. */
   var GOOGLE = window.APP_AUTH === "google";
+  var DRIVER = window.APP_DRIVER || null;
   function FirebaseStore() {
     var self = this;
     firebase.initializeApp(CFG.firebase);
@@ -234,8 +239,9 @@
     this.ref = this.db.ref("vehicles");
     this.user = null; this.userCbs = []; this.settingsCbs = []; this.vehCbs = [];
     this.settingsLoaded = false; this._lastVeh = null;
+    this.driverOk = null;                 // true/false sau khi đăng ký khóa QR (chỉ trang tài xế)
     if (GOOGLE) this.auth.getRedirectResult().catch(function (e) { console.error(e && e.message); });
-    this.ready = new Promise(function (resolve) {
+    var authed = new Promise(function (resolve) {
       self.auth.onAuthStateChanged(function (u) {
         var ok = u && (!GOOGLE || !u.isAnonymous);
         self.user = ok ? u : null; self.authKnown = true;
@@ -246,22 +252,39 @@
         });
       });
     });
+    this.ready = !DRIVER ? authed : authed.then(function (u) {
+      if (!DRIVER.k) { self.driverOk = false; return u; }
+      return self.db.ref("driverSessions/" + u.uid + "/" + DRIVER.vid).set(DRIVER.k)
+        .then(function () { self.driverOk = true; return u; },
+              function () { self.driverOk = false; return u; });
+    });
     this.settingsReady = this.ready.then(function () {
       return new Promise(function (resolve) {
         self.db.ref("settings").on("value", function (snap) {
           applySettings(snap.val());
-          self.settingsLoaded = true;
+          self.settingsLoaded = true; self.settingsDenied = false;
           resolve();
           self.settingsCbs.forEach(function (cb) { cb(); });
           self._emitVeh();
-        }, function (err) { console.error("Đọc cài đặt lỗi:", err && err.message); applySettings(null); resolve(); });
+        }, function (err) {
+          console.error("Đọc cài đặt lỗi:", err && err.message);
+          self.settingsDenied = true; applySettings(null); resolve();
+          self.settingsCbs.forEach(function (cb) { cb(); });
+        });
       });
     });
   }
+  /* Tài khoản Google hiện tại có được xem dashboard không (thử đọc cài đặt) */
+  FirebaseStore.prototype.checkAccess = function () {
+    var self = this;
+    return this.ready.then(function () {
+      return self.db.ref("settings").once("value").then(function () { return true; }, function () { return false; });
+    });
+  };
   FirebaseStore.prototype.onUser = function (cb) { this.userCbs.push(cb); if (this.authKnown) cb(this.user); };
   FirebaseStore.prototype.isOwner = function () {
     var u = this.user;
-    return !!(u && u.email && u.emailVerified && u.email.toLowerCase() === String(CFG.ownerEmail || "").toLowerCase());
+    return !!(u && !u.isAnonymous && CFG.ownerUid && u.uid === CFG.ownerUid);
   };
   FirebaseStore.prototype.signInGoogle = function () {
     var self = this, provider = new firebase.auth.GoogleAuthProvider();
@@ -288,10 +311,11 @@
       });
     });
   };
-  FirebaseStore.prototype.subscribeViewers = function (cb) {
+  var LIST_NOTE = { viewers: "xem nhật ký", dash: "xem dashboard" };
+  FirebaseStore.prototype.subscribeAccess = function (list, cb) {
     var self = this, r = null;
     this.ready.then(function () {
-      r = self.db.ref("access/viewers");
+      r = self.db.ref("access/" + list);
       r.on("value", function (snap) {
         var arr = []; snap.forEach(function (c) { arr.push(c.val()); });
         cb(arr.sort(function (a, b) { return (a.email || "").localeCompare(b.email || ""); }));
@@ -299,21 +323,64 @@
     });
     return function () { if (r) r.off(); };
   };
-  FirebaseStore.prototype._access = function (action, email, val) {
+  FirebaseStore.prototype._access = function (list, email, val, note) {
     var self = this, k = emailKey(email);
     return this.ready.then(function (user) {
-      return self.db.ref("access/viewers/" + k).set(val).then(function () {
-        var e = adminLog("access", (val ? "cấp quyền xem nhật ký: " : "thu hồi quyền: ") + String(email).trim().toLowerCase());
-        e.uid = user.uid; e.by = user.email || "";
-        e.serverTs = firebase.database.ServerValue.TIMESTAMP;
-        self.db.ref("logs").push(clean(e));
+      return self.db.ref("access/" + list + "/" + k).set(val).then(function () {
+        self._adminLog(user, note || ((val ? "cấp quyền " : "thu hồi quyền ") + LIST_NOTE[list] + ": " + String(email).trim().toLowerCase()));
       });
     });
   };
-  FirebaseStore.prototype.addViewer = function (email) {
-    return this._access("add", email, { email: String(email).trim().toLowerCase(), addedAt: firebase.database.ServerValue.TIMESTAMP });
+  FirebaseStore.prototype._adminLog = function (user, note) {
+    var e = adminLog("access", note); e.uid = user.uid; e.by = user.email || "";
+    e.serverTs = firebase.database.ServerValue.TIMESTAMP;
+    return this.db.ref("logs").push(clean(e));
   };
-  FirebaseStore.prototype.removeViewer = function (email) { return this._access("remove", email, null); };
+  FirebaseStore.prototype.addAccess = function (list, email) {
+    return this._access(list, email, { email: String(email).trim().toLowerCase(), addedAt: firebase.database.ServerValue.TIMESTAMP });
+  };
+  FirebaseStore.prototype.removeAccess = function (list, email) { return this._access(list, email, null); };
+  FirebaseStore.prototype.subscribeViewers = function (cb) { return this.subscribeAccess("viewers", cb); };
+  FirebaseStore.prototype.addViewer = function (email) { return this.addAccess("viewers", email); };
+  FirebaseStore.prototype.removeViewer = function (email) { return this.removeAccess("viewers", email); };
+
+  /* ----- khóa QR (chỉ chủ project) ----- */
+  function randomKey() {
+    var a = new Uint8Array(18); (window.crypto || window.msCrypto).getRandomValues(a);
+    return Array.prototype.map.call(a, function (b) { return ("0" + b.toString(16)).slice(-2); }).join("");
+  }
+  FirebaseStore.prototype.subscribeQr = function (cb) {
+    var self = this;
+    this.ready.then(function () {
+      var keys = null, legacy = null;
+      function emit() { if (keys !== null && legacy !== null) cb(keys, legacy); }
+      self.db.ref("qrKeys").on("value", function (s) { keys = s.val() || {}; emit(); }, function (err) { cb(null, null, err); });
+      self.db.ref("config/legacyQr").on("value", function (s) { legacy = s.val() !== false; emit(); }, function () { legacy = false; emit(); });
+    });
+  };
+  /* Tạo khóa cho xe chưa có (không đụng khóa đang dùng) */
+  FirebaseStore.prototype.ensureQrKeys = function (ids, keys) {
+    var upd = {}, n = 0;
+    ids.forEach(function (id) { if (!keys[id]) { upd[id] = randomKey(); n++; } });
+    return n ? this.db.ref("qrKeys").update(upd) : Promise.resolve();
+  };
+  /* Đổi toàn bộ khóa: mọi mã QR và phiên tài xế cũ hết hiệu lực */
+  FirebaseStore.prototype.rotateQrKeys = function (ids) {
+    var self = this, upd = {};
+    ids.forEach(function (id) { upd["qrKeys/" + id] = randomKey(); });
+    upd.driverSessions = null;
+    return this.ready.then(function (user) {
+      return self.db.ref().update(upd).then(function () { return self._adminLog(user, "đổi mã QR tất cả xe (QR cũ hết hiệu lực)"); });
+    });
+  };
+  FirebaseStore.prototype.setLegacyQr = function (on) {
+    var self = this;
+    return this.ready.then(function (user) {
+      return self.db.ref("config/legacyQr").set(!!on).then(function () {
+        return self._adminLog(user, on ? "bật cho phép QR cũ" : "tắt QR cũ (chỉ nhận QR có khóa)");
+      });
+    });
+  };
 
   FirebaseStore.prototype._emitVeh = function () {
     if (this._lastVeh === null) return;
@@ -425,7 +492,9 @@
   function DemoStore() {
     if (!localStorage.getItem(KEY)) localStorage.setItem(KEY, "{}");
     this.cbs = []; this.logCbs = []; this.settingsCbs = []; this.viewerCbs = [];
-    this.user = { uid: "demo", email: CFG.ownerEmail, emailVerified: true };
+    this.user = { uid: "demo", email: "demo@local", emailVerified: true };
+    this.driverOk = true;
+    this.ready = Promise.resolve(this.user); this.settingsReady = Promise.resolve();
     this._loadSettings();
     var self = this;
     window.addEventListener("storage", function (e) {
@@ -439,6 +508,19 @@
     try { applySettings(JSON.parse(localStorage.getItem(SETKEY) || "null")); } catch (e) { applySettings(null); }
   };
   DemoStore.prototype.onUser = function (cb) { cb(this.user); };
+  DemoStore.prototype.checkAccess = function () { return Promise.resolve(true); };
+  DemoStore.prototype.subscribeAccess = function (list, cb) {
+    if (list === "viewers") return this.subscribeViewers(cb);
+    cb([]); return function () {};
+  };
+  DemoStore.prototype.addAccess = function (list, email) { return list === "viewers" ? this.addViewer(email) : Promise.resolve(); };
+  DemoStore.prototype.removeAccess = function (list, email) { return list === "viewers" ? this.removeViewer(email) : Promise.resolve(); };
+  DemoStore.prototype.subscribeQr = function (cb) {
+    var k = {}; CFG.vehicles.forEach(function (v) { k[v.id] = "demo-" + v.id; }); cb(k, true);
+  };
+  DemoStore.prototype.ensureQrKeys = function () { return Promise.resolve(); };
+  DemoStore.prototype.rotateQrKeys = function () { return Promise.resolve(); };
+  DemoStore.prototype.setLegacyQr = function () { return Promise.resolve(); };
   DemoStore.prototype.isOwner = function () { return true; };
   DemoStore.prototype.signInGoogle = function () { return Promise.resolve(); };
   DemoStore.prototype.signOut = function () { alert("Chế độ demo: không có đăng xuất."); return Promise.resolve(); };

@@ -19,9 +19,10 @@ window.APP_CONFIG = {
     measurementId:     "G-MGPWCY7H0Q"
   },
 
-  // Email chủ project: đăng nhập trang Nhật ký bằng email này để sửa xe, tài xế,
-  // điểm đến và cấp quyền xem nhật ký. Phải trùng với email trong database.rules.json.
-  ownerEmail: "(email đã ẩn)",
+  // Mã tài khoản (uid) của chủ project trên Firebase. Chủ project sửa được xe, tài xế,
+  // điểm đến, cấp quyền xem và in/đổi mã QR. Phải trùng với uid trong database.rules.json.
+  // (uid không phải thông tin bí mật; email chủ project không ghi ở đây vì repo công khai.)
+  ownerUid: "Ejd08GXR2zP7mo3OqNzba91QA8J2",
 
   // --- Giá trị MẶC ĐỊNH (chỉ dùng khi chưa lưu cài đặt trên trang Nhật ký) ---
   vehicles: [

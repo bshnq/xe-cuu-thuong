@@ -80,6 +80,7 @@
   .shead{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
   .shead h3{margin:0;font-size:17px;letter-spacing:-.01em}
   .shead a{font-size:13px;font-weight:600;color:var(--ink)}
+  .shead small{font-size:12px;color:var(--muted);font-weight:600}
   .erow{display:flex;gap:8px;margin-bottom:8px;align-items:center}
   .erow input{flex:1;min-width:0;border:none;background:var(--field);border-radius:12px;padding:12px;font-size:15px;color:var(--ink);font-family:inherit}
   .erow input.narrow{flex:0 0 38%}
@@ -145,7 +146,15 @@
         <button class="add" data-add="dst">+ Thêm điểm đến</button>
       </div>
       <div class="card">
-        <div class="shead"><h3>Quyền xem nhật ký</h3></div>
+        <div class="shead"><h3>Quyền xem dashboard</h3></div>
+        <div id="dashers"></div>
+        <div class="erow" style="margin-top:12px">
+          <input type="email" id="newDash" placeholder="email@gmail.com" autocomplete="off">
+          <button class="btn sm" id="btnAddDash">Thêm</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="shead"><h3>Quyền xem nhật ký</h3><small>xem được cả dashboard</small></div>
         <div id="viewers"></div>
         <div class="erow" style="margin-top:12px">
           <input type="email" id="newViewer" placeholder="email@gmail.com" autocomplete="off">
@@ -288,35 +297,33 @@ function filtered(){
   });
 }
 
-/* ----- mô tả chi tiết từng hành động ----- */
+/* ----- mô tả chi tiết từng hành động -----
+   Mọi giá trị lấy từ nhật ký đều do điện thoại tài xế ghi, nên LUÔN đi qua esc()
+   trước khi ghép vào HTML. plain=true: trả chữ thuần (tìm kiếm, CSV). */
+function num(v){ v=Number(v); return isFinite(v)?String(Math.round(v)):"?"; }
 function detail(e,plain){
-  var s="";
+  var T=plain?function(x){return String(x==null?"":x);}:esc;
   switch(e.action){
     case "start":
-      s="Đi "+e.etaMinutes+" phút, về dự kiến "+UI.hm(e.returnAt)+(e.destination?" · đến "+e.destination:"");
-      break;
+      return T("Đi "+num(e.etaMinutes)+" phút, về dự kiến "+UI.hm(e.returnAt)+(e.destination?" · đến "+e.destination:""));
     case "extend": case "shorten":
-      s=(e.addMinutes>0?"+":"")+e.addMinutes+" phút: về dự kiến "+UI.hm(e.prevReturnAt)+" → "+UI.hm(e.returnAt)
-        +(e.wasLate?" · khi đã trễ":"");
-      break;
+      var a=Number(e.addMinutes)||0;
+      return T((a>0?"+":"")+num(a)+" phút: về dự kiến "+UI.hm(e.prevReturnAt)+" → "+UI.hm(e.returnAt)
+        +(e.wasLate?" · khi đã trễ":""));
     case "end":
-      var late=e.lateMin>0;
-      s="Chuyến "+UI.hm(e.departAt)+" → "+UI.hm(e.actualReturnAt)+": đi "+e.durationMin+" phút (dự kiến "+e.etaMinutes+")"
-        +" · "+(plain?(late?"trễ "+e.lateMin+" phút":"đúng giờ")
-          :(late?'<span class="late">trễ '+e.lateMin+' phút</span>':'<span class="ontime">đúng giờ</span>'))
-        +(e.destination?" · "+e.destination:"");
-      return plain?s:s.replace(/(<span[^>]*>[^<]*<\/span>)|([^<]+)/g,function(m,tag,txt){return tag||esc(txt);});
+      var late=Number(e.lateMin)>0;
+      var head="Chuyến "+UI.hm(e.departAt)+" → "+UI.hm(e.actualReturnAt)+": đi "+num(e.durationMin)+" phút (dự kiến "+num(e.etaMinutes)+") · ";
+      var tail=e.destination?" · "+e.destination:"";
+      if(plain) return T(head+(late?"trễ "+num(e.lateMin)+" phút":"đúng giờ")+tail);
+      return esc(head)+(late?'<span class="late">trễ '+num(e.lateMin)+' phút</span>':'<span class="ontime">đúng giờ</span>')+esc(tail);
     case "driver":
-      s=(e.prevDriver||"(chưa chọn)")+" → "+(e.driver||"(bỏ chọn)")+(e.wasBusy?" · khi xe đang đi":"");
-      break;
+      return T((e.prevDriver||"(chưa chọn)")+" → "+(e.driver||"(bỏ chọn)")+(e.wasBusy?" · khi xe đang đi":""));
     case "open":
-      s=e.status==="busy"?"Xe đang đi":"Xe sẵn sàng";
-      break;
+      return T(e.status==="busy"?"Xe đang đi":"Xe sẵn sàng");
     case "settings": case "access":
-      s=e.note||"";
-      break;
+      return T(e.note||"");
   }
-  return plain?s:esc(s);
+  return "";
 }
 
 /* ----- vẽ bảng + thống kê ----- */
@@ -339,8 +346,8 @@ function render(){
   $("rows").innerHTML=html||'<tr><td colspan="6" class="empty">Không có hoạt động nào trong khoảng này.</td></tr>';
 
   var ends=rows.filter(function(e){return e.action==="end";});
-  var mins=ends.reduce(function(s,e){return s+(e.durationMin||0);},0);
-  var lates=ends.filter(function(e){return e.lateMin>0;}).length;
+  var mins=ends.reduce(function(s,e){return s+(Number(e.durationMin)||0);},0);
+  var lates=ends.filter(function(e){return Number(e.lateMin)>0;}).length;
   var exts=rows.filter(function(e){return e.action==="extend";}).length;
   var starts=rows.filter(function(e){return e.action==="start";}).length;
   $("stats").innerHTML=
@@ -365,7 +372,7 @@ $("btnCsv").onclick=function(){
       e.durationMin,e.lateMin,detail(e,true),e.device,e.uid,e.by,e.tripId,
       typeof e.serverTs==="number"?UI.dmy(e.serverTs)+" "+UI.hms(e.serverTs):""];
   })).map(function(r){
-    return r.map(function(c){ c=(c==null?"":String(c)); return /[",\n;]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c; }).join(",");
+    return r.map(function(c){ c=(c==null?"":String(c)); if(/^[=+\-@\t\r]/.test(c)) c="'"+c; return /[",\n;]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c; }).join(",");
   });
   var blob=new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
   var a=document.createElement("a");
@@ -473,35 +480,42 @@ window.addEventListener("beforeunload",function(e){ if(dirty){ e.preventDefault(
 /* trạng thái xe (để cảnh báo khi xóa xe đang đi) */
 var lastVeh={};
 
-/* ----- quyền xem nhật ký ----- */
-function drawViewers(list){
-  var html='<div class="em"><span>'+esc(CFG.ownerEmail)+'</span><small>Chủ project</small></div>';
-  list.forEach(function(v){
+/* ----- quyền xem: "viewers" = nhật ký + dashboard, "dash" = chỉ dashboard ----- */
+var ACCESS_UI={ viewers:{box:"viewers",input:"newViewer",btn:"btnAddViewer"}, dash:{box:"dashers",input:"newDash",btn:"btnAddDash"} };
+function ownerEmail(){ return String((Store.user&&Store.user.email)||"").toLowerCase(); }
+function drawAccess(list,items){
+  var ui=ACCESS_UI[list];
+  var html='<div class="em"><span>'+esc(ownerEmail())+'</span><small>Chủ project</small></div>';
+  items.forEach(function(v){
     html+='<div class="em"><span>'+esc(v.email)+'</span><button data-rm="'+esc(v.email)+'">Thu hồi</button></div>';
   });
-  $("viewers").innerHTML=html;
-  Array.prototype.forEach.call($("viewers").querySelectorAll("[data-rm]"),function(b){
+  $(ui.box).innerHTML=html;
+  Array.prototype.forEach.call($(ui.box).querySelectorAll("[data-rm]"),function(b){
     b.onclick=function(){
       var em=b.getAttribute("data-rm");
       if(!confirm("Thu hồi quyền của "+em+"?")) return;
-      Store.removeViewer(em).then(function(){ UI.toast("Đã thu hồi"); });
+      Store.removeAccess(list,em).then(function(){ UI.toast("Đã thu hồi"); });
     };
   });
 }
-function addViewer(){
-  var em=$("newViewer").value.trim().toLowerCase();
+function addAccess(list){
+  var ui=ACCESS_UI[list], em=$(ui.input).value.trim().toLowerCase();
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)){ UI.toast("Email chưa đúng"); return; }
-  if(em===String(CFG.ownerEmail).toLowerCase()){ UI.toast("Đây là email chủ project"); return; }
-  Store.addViewer(em).then(function(){ $("newViewer").value=""; UI.toast("Đã cấp quyền"); })
+  if(em===ownerEmail()){ UI.toast("Đây là email chủ project"); return; }
+  Store.addAccess(list,em).then(function(){ $(ui.input).value=""; UI.toast("Đã cấp quyền"); })
     .catch(function(){ UI.toast("Không lưu được"); });
 }
-$("btnAddViewer").onclick=addViewer;
-$("newViewer").addEventListener("keydown",function(e){ if(e.key==="Enter") addViewer(); });
+Object.keys(ACCESS_UI).forEach(function(list){
+  var ui=ACCESS_UI[list];
+  $(ui.btn).onclick=function(){ addAccess(list); };
+  $(ui.input).addEventListener("keydown",function(e){ if(e.key==="Enter") addAccess(list); });
+});
 
 function startAdmin(){
   if(adminStarted) return; adminStarted=true;
   $("tabs").hidden=!appShown;
-  Store.subscribeViewers(function(list){ drawViewers(list||[]); });
+  Store.subscribeAccess("viewers",function(list){ drawAccess("viewers",list||[]); });
+  Store.subscribeAccess("dash",function(list){ drawAccess("dash",list||[]); });
   Store.subscribeAll(function(map){ lastVeh=map; });
 }
 
