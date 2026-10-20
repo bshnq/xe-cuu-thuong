@@ -230,6 +230,33 @@
      Dashboard, Nhật ký, QR (window.APP_AUTH = "google"): phải đăng nhập Google.
      Mỗi thao tác xe dùng transaction để 2 điện thoại bấm cùng lúc không đè nhau. */
   var GOOGLE = window.APP_AUTH === "google";
+
+  /* Ngay sau khi đăng nhập, Firebase có thể chưa kịp gắn tài khoản mới vào kết nối
+     -> từ chối (permission_denied) và HỦY luôn listener. Thử lại vài lần rồi mới bỏ. */
+  var RETRY = [500, 1000, 2000, 4000, 8000];
+  function denied(err) { return /permission/i.test(String((err && (err.code || err.message)) || "")); }
+  function listen(ref, onVal, onFail) {
+    var n = 0, stopped = false;
+    function go() {
+      if (stopped) return;
+      ref.on("value", onVal, function (err) {
+        if (!stopped && denied(err) && n < RETRY.length) setTimeout(go, RETRY[n++]);
+        else if (onFail) onFail(err);
+      });
+    }
+    go();
+    return function () { stopped = true; ref.off("value", onVal); };
+  }
+  function onceRetry(ref) {
+    var n = 0;
+    return new Promise(function (resolve, reject) {
+      (function go() {
+        ref.once("value").then(resolve, function (err) {
+          if (denied(err) && n < 3) setTimeout(go, RETRY[n++]); else reject(err);
+        });
+      })();
+    });
+  }
   var DRIVER = window.APP_DRIVER || null;
   function FirebaseStore() {
     var self = this;
@@ -260,7 +287,7 @@
     });
     this.settingsReady = this.ready.then(function () {
       return new Promise(function (resolve) {
-        self.db.ref("settings").on("value", function (snap) {
+        listen(self.db.ref("settings"), function (snap) {
           applySettings(snap.val());
           self.settingsLoaded = true; self.settingsDenied = false;
           resolve();
@@ -278,7 +305,7 @@
   FirebaseStore.prototype.checkAccess = function () {
     var self = this;
     return this.ready.then(function () {
-      return self.db.ref("settings").once("value").then(function () { return true; }, function () { return false; });
+      return onceRetry(self.db.ref("settings")).then(function () { return true; }, function () { return false; });
     });
   };
   FirebaseStore.prototype.onUser = function (cb) { this.userCbs.push(cb); if (this.authKnown) cb(this.user); };
@@ -315,13 +342,12 @@
   FirebaseStore.prototype.subscribeAccess = function (list, cb) {
     var self = this, r = null;
     this.ready.then(function () {
-      r = self.db.ref("access/" + list);
-      r.on("value", function (snap) {
+      r = listen(self.db.ref("access/" + list), function (snap) {
         var arr = []; snap.forEach(function (c) { arr.push(c.val()); });
         cb(arr.sort(function (a, b) { return (a.email || "").localeCompare(b.email || ""); }));
       }, function (err) { cb([], err); });
     });
-    return function () { if (r) r.off(); };
+    return function () { if (r) r(); };
   };
   FirebaseStore.prototype._access = function (list, email, val, note) {
     var self = this, k = emailKey(email);
@@ -354,8 +380,8 @@
     this.ready.then(function () {
       var keys = null, legacy = null;
       function emit() { if (keys !== null && legacy !== null) cb(keys, legacy); }
-      self.db.ref("qrKeys").on("value", function (s) { keys = s.val() || {}; emit(); }, function (err) { cb(null, null, err); });
-      self.db.ref("config/legacyQr").on("value", function (s) { legacy = s.val() !== false; emit(); }, function () { legacy = false; emit(); });
+      listen(self.db.ref("qrKeys"), function (s) { keys = s.val() || {}; emit(); }, function (err) { cb(null, null, err); });
+      listen(self.db.ref("config/legacyQr"), function (s) { legacy = s.val() !== false; emit(); }, function () { legacy = false; emit(); });
     });
   };
   /* Tạo khóa cho xe chưa có (không đụng khóa đang dùng) */
@@ -393,14 +419,15 @@
     this.vehCbs.push(cb);
     if (this.vehCbs.length > 1) { this._emitVeh(); return; }
     this.settingsReady.then(function () {
-      self.ref.on("value", function (snap) { self._lastVeh = snap.val() || {}; self._emitVeh(); });
+      listen(self.ref, function (snap) { self._lastVeh = snap.val() || {}; self._emitVeh(); },
+        function (err) { console.error("Đọc trạng thái xe lỗi:", err && err.message); });
     });
   };
   /* Vị trí GPS do Apps Script ghi vào "gps/<id xe>" (trình duyệt chỉ đọc) */
   FirebaseStore.prototype.subscribeGps = function (cb) {
     var self = this;
     this.ready.then(function () {
-      self.db.ref("gps").on("value", function (snap) { cb(snap.val() || {}); },
+      listen(self.db.ref("gps"), function (snap) { cb(snap.val() || {}); },
         function (err) { console.error("Đọc GPS lỗi:", err && err.message); cb({}); });
     });
   };
@@ -444,11 +471,11 @@
     });
   };
   FirebaseStore.prototype.subscribeLogs = function (fromMs, toMs, cb) {
-    var self = this, q = null, handler = null, cancelled = false;
+    var self = this, stop = null, cancelled = false;
     this.ready.then(function () {
       if (cancelled) return;
-      q = self.db.ref("logs").orderByChild("ts").startAt(fromMs).endAt(toMs);
-      handler = q.on("value", function (snap) {
+      var q = self.db.ref("logs").orderByChild("ts").startAt(fromMs).endAt(toMs);
+      stop = listen(q, function (snap) {
         var arr = [];
         snap.forEach(function (c) { var v = c.val(); v._key = c.key; arr.push(v); });
         cb(arr);
@@ -457,22 +484,23 @@
         cb([], err);
       });
     });
-    return function () { cancelled = true; if (q && handler) q.off("value", handler); };
+    return function () { cancelled = true; if (stop) stop(); };
   };
+
 
 
   /* ----- thùng rác nhật ký: chỉ ẨN trên giao diện, dữ liệu gốc vẫn còn ----- */
   FirebaseStore.prototype.subscribeTrash = function (cb) {
-    var self = this, r = null;
+    var self = this, stop = null;
     this.ready.then(function () {
-      r = self.db.ref("logView/trash");
-      r.on("value", function (snap) {
+      stop = listen(self.db.ref("logView/trash"), function (snap) {
         var arr = []; snap.forEach(function (c) { var v = c.val(); v.id = c.key; arr.push(v); });
         cb(arr.sort(function (a, b) { return b.at - a.at; }));
       }, function () { cb([]); });
     });
-    return function () { if (r) r.off(); };
+    return function () { if (stop) stop(); };
   };
+
   FirebaseStore.prototype.trashLogs = function (fromMs, toMs, count) {
     var self = this;
     return this.ready.then(function (user) {
